@@ -5,7 +5,7 @@ import pandas as pd
 import pickle
 import contextlib
 
-from utils.crossvalidation import predict_kfold_ML, predict_kfold_RS
+from utils.crossvalidation import predict_kfold_ML, predict_kfold_RS, predict_groupkfold_ML, predict_groupkfold_RS
 from utils.analysis import AUC_stderr_classic,AUC_stderr_hanley, group_files_analyze, mdaeli5_analysis, plot_all_aucs, paired_ttest, cutoff_threshold_maxfbeta, cutoff_threshold_single, cutoff_threshold_double, cutoff_threshold_triple,cutoff_threshold_accuracy, all_thresholds, create_descriptive_xls
 
 from user_data_utils import load_database, clean_database, process_database, fillna_database

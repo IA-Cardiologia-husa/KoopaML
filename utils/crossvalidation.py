@@ -59,15 +59,13 @@ def predict_groupkfold_ML(data, label, features, group_label, clf, clf_name, see
 
 	gkf = StratifiedGroupKFold(cvfolds)
 
-	X_shuffled, Y_shuffled, G_shuffled = sk_u.shuffle(X, Y, G, random_state=seed)
-
 	predicted_probability = []
 	true_label = []
 
 	for train_index, test_index in gkf.split(X,Y,G):
-		X_train, X_test = X_shuffled.iloc[train_index], X_shuffled.iloc[test_index]
-		Y_train, Y_test = Y_shuffled.iloc[train_index].astype(bool), Y_shuffled.iloc[test_index].astype(bool)
-		G_train, G_test = G_shuffled.iloc[train_index], G_shuffled.iloc[test_index]
+		X_train, X_test = X.iloc[train_index], X.iloc[test_index]
+		Y_train, Y_test = Y.iloc[train_index].astype(bool), Y.iloc[test_index].astype(bool)
+		G_train, G_test = G.iloc[train_index], G.iloc[test_index]
 		try:
 			try:
 				Y_prob = clf.fit(X_train, Y_train, groups=G_train).predict_proba(X_test)
@@ -94,14 +92,12 @@ def predict_groupkfold_RS(data, label, features, sign, score_name,seed, cvfolds)
 
 	gkf = StratifiedGroupKFold(cvfolds)
 
-	X_shuffled, Y_shuffled, G_shuffled = sk_u.shuffle(X, Y, G, random_state=seed)
-
 	predicted_probability = []
 	true_label = []
 
 	for train_index, test_index in gkf.split(X,Y,G):
-		X_train, X_test = X_shuffled.iloc[train_index], X_shuffled.iloc[test_index]
-		Y_train, Y_test = Y_shuffled.iloc[train_index].astype(bool), Y_shuffled.iloc[test_index].astype(bool)
+		X_train, X_test = X.iloc[train_index], X.iloc[test_index]
+		Y_train, Y_test = Y.iloc[train_index].astype(bool), Y.iloc[test_index].astype(bool)
 
 		Y_prob = sign*X_test.loc[:,score_name]
 		predicted_probability.append(list(Y_prob.values.flat))

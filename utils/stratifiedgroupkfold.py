@@ -7,6 +7,8 @@ from sklearn.utils.validation import check_array
 from sklearn.utils.multiclass import type_of_target
 from sklearn.utils.fixes import comb
 
+import numpy as np
+
 
 class StratifiedGroupKFold(_BaseKFold):
     """Stratified K-Folds cross-validator
