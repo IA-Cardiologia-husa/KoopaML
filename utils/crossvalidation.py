@@ -3,7 +3,7 @@ import pandas as pd
 import sklearn.model_selection as sk_ms
 import time
 
-from stratifiedgroupkfold import StratifiedGroupKFold
+from .stratifiedgroupkfold import StratifiedGroupKFold
 
 def predict_kfold_ML(data, label, features, clf, clf_name, seed, cvfolds):
 
