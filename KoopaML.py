@@ -294,13 +294,18 @@ class FinalModelAndHyperparameterResults(luigi.Task):
 		df_filtered = WF_info[self.wf_name]["filter_function"](df_input)
 		label = WF_info[self.wf_name]["label_name"]
 		features = WF_info[self.wf_name]["feature_list"]
+		group_label = WF_info[self.wf_name]["group_label"]
 
 		self.clf=ML_info[self.clf_name]["clf"]
 
 		X = df_filtered.loc[:,features]
 		Y = df_filtered.loc[:,[label]]
+		if(group_label is None):
+			self.clf.fit(X,Y)
+		else:
+			G = df_filtered.loc[:,[group_label]]
+			self.clf.fit(X,Y,groups=G)
 
-		self.clf.fit(X,Y)
 
 		try:
 			self.final_clf = self.clf.best_estimator_
