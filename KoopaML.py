@@ -1,13 +1,14 @@
 import os
-import luigi
 import numpy as np
 import pandas as pd
+import datetime as dt
 import pickle
+
+import luigi
 import contextlib
 
 from utils.crossvalidation import predict_kfold_ML, predict_kfold_RS, predict_groupkfold_ML, predict_groupkfold_RS
 from utils.analysis import AUC_stderr_classic,AUC_stderr_hanley, group_files_analyze, mdaeli5_analysis, plot_all_aucs, paired_ttest, cutoff_threshold_maxfbeta, cutoff_threshold_single, cutoff_threshold_double, cutoff_threshold_triple,cutoff_threshold_accuracy, all_thresholds, create_descriptive_xls
-
 from user_data_utils import load_database, clean_database, process_database, fillna_database
 from user_MLmodels_info import ML_info
 from user_RiskScores_info import RS_info
@@ -394,7 +395,7 @@ class GraphsWF(luigi.Task):
 					results_dict=pickle.load(f)
 					auc_ml[i]=results_dict["avg_auc"]
 
-			sorted_ml = sorted(auc_ml.keys(), key=lambda x: auc_ml[x])
+			sorted_ml = sorted(auc_ml.keys(), key=lambda x: auc_ml[x], reverse=True)
 
 			auc_rs = {}
 			for i in self.list_RS:
@@ -402,7 +403,7 @@ class GraphsWF(luigi.Task):
 						results_dict=pickle.load(f)
 						auc_rs[i]=results_dict["avg_auc"]
 
-			sorted_rs = sorted(auc_rs.keys(), key=lambda x: auc_rs[x])
+			sorted_rs = sorted(auc_rs.keys(), key=lambda x: auc_rs[x], reverse=True)
 
 			# We plot the ROC of the best ML model and the best risk score
 			tasks={}
@@ -699,4 +700,5 @@ class AllTasks(luigi.Task):
 			f.write("prueba")
 
 	def output(self):
-		return luigi.LocalTarget(os.path.join(log_path, "AllTask_Log.txt"))
+		TIMESTRING=dt.datetime.now().strftime("%y%m%d-%H%M%S")
+		return luigi.LocalTarget(os.path.join(log_path, f"AllTask_Log-{TIMESTRING}.txt"))

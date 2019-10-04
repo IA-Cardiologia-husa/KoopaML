@@ -84,9 +84,9 @@ def predict_groupkfold_ML(data, label, features, group_label, clf, clf_name, see
 
 	return tl_pp_dict
 
-def predict_groupkfold_RS(data, label, features, sign, score_name,seed, cvfolds):
+def predict_groupkfold_RS(data, label, features, group_label, sign, score_name,seed, cvfolds):
 
-	X = data.loc[:,features]
+	X = data.loc[:,:]
 	Y = data.loc[:,[label]]
 	G = data.loc[:, group_label]
 
