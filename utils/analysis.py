@@ -36,9 +36,9 @@ def create_descriptive_xls(data, wf_name, label_name):
 				dt = data[i].astype(float).describe()
 				d0 = data.loc[data[j]==0,i].astype(float).describe()
 				d1 = data.loc[data[j]==1,i].astype(float).describe()
-				row = {'Name':dict_var[i], 'N':(t0+t1), 'Mean':f"{dt['mean']:.1%}",
-					  j+'_0_N':d0['count'],j+'_0_Mean':f"{d0['mean']:.1%}",
-					  j+'_1_N':d1['count'],j+'_1_Mean':f"{d1['mean']:.1%}",
+				row = {'Name':dict_var[i], 'N':(t0+t1), 'Mean':f"{t1} ({dt['mean']:.1%})",
+					  j+'_0_N':d0['count'],j+'_0_Mean':f"{f01} ({d0['mean']:.1%})",
+					  j+'_1_N':d1['count'],j+'_1_Mean':f"{f11} ({d1['mean']:.1%})",
 					  'p-value':f'{pvalue:.3f}'}
 				row_list.append(row)
 

@@ -326,8 +326,8 @@ class FinalModelAndHyperparameterResults(luigi.Task):
 
 class AllModels_PairedTTest(luigi.Task):
 	wf_name = luigi.Parameter()
-	repetitions = luigi.Parameter(default=10)
-	folds = luigi.Parameter(default=10)
+	repetitions = luigi.IntParameter(default=10)
+	folds = luigi.IntParameter(default=10)
 	list_ML = luigi.ListParameter()
 	list_RS = luigi.ListParameter()
 
