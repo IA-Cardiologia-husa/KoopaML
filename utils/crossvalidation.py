@@ -70,7 +70,7 @@ def predict_groupkfold_ML(data, label, features, group_label, clf, seed, cvfolds
 	Y = data.loc[:,[label]].astype(bool)
 	G = data.loc[:, group_label]
 
-	gkf = StratifiedGroupKFold(cvfolds, random_state=seed)
+	gkf = StratifiedGroupKFold(cvfolds, random_state=seed, shuffle=True)
 
 	predicted_probability = []
 	true_label = []
@@ -103,7 +103,7 @@ def predict_groupkfold_RS(data, label, features, group_label, sign, score_name,s
 	Y = data.loc[:,[label]].astype(bool)
 	G = data.loc[:, group_label]
 
-	gkf = StratifiedGroupKFold(cvfolds, random_state=seed)
+	gkf = StratifiedGroupKFold(cvfolds, random_state=seed, shuffle=True)
 
 	predicted_probability = []
 	true_label = []
@@ -111,7 +111,7 @@ def predict_groupkfold_RS(data, label, features, group_label, sign, score_name,s
 	for train_index, test_index in gkf.split(X,Y,G):
 		X_train, X_test = X.iloc[train_index], X.iloc[test_index]
 		Y_train, Y_test = Y.iloc[train_index], Y.iloc[test_index]
-		
+
 		Y_prob = sign*X_test.loc[:,score_name]
 		predicted_probability.append(list(Y_prob.values.flat))
 		true_label.append(list(Y_test.values.flat))
