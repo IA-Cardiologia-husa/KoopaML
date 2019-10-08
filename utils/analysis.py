@@ -20,7 +20,7 @@ def create_descriptive_xls(data, wf_name, label_name):
 
 	if (len(dict_var.keys())==0):
 		for i in data.columns:
-			data[i]=i
+			dict_var[i]=i
 
 	for i in data.columns:
 		if i in dict_var.keys():

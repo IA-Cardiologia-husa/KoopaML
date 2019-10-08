@@ -334,7 +334,7 @@ class FinalModelAndHyperparameterResults(luigi.Task):
 			G = df_filtered.loc[:,[group_label]]
 			try:
 				self.clf.fit(X,Y,groups=G)
-			else:
+			except:
 				self.clf.fit(X,Y)
 
 
