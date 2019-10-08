@@ -5,7 +5,20 @@ import time
 
 from .stratifiedgroupkfold import StratifiedGroupKFold
 
-def predict_kfold_ML(data, label, features, clf, clf_name, seed, cvfolds):
+def external_validation(data, external_data, label, features, clf):
+	X = data.loc[:,features]
+	Y = data.loc[:,[label]]
+
+	external_X = external_data.loc[:,features]
+	external_Y = external_data.loc[:,[label]]
+
+	external_Y_prob = clf.fit(X, Y).predict_proba(external_X)
+
+	tl_pp_dict={"true_label":list(external_Y), "pred_prob":list(external_Y_prob)}
+
+	return tl_pp_dict
+
+def predict_kfold_ML(data, label, features, clf, seed, cvfolds):
 
 
 	X = data.loc[:,features]
@@ -51,13 +64,13 @@ def predict_kfold_RS(data, label, features, sign, score_name,seed, cvfolds):
 
 	return tl_pp_dict
 
-def predict_groupkfold_ML(data, label, features, group_label, clf, clf_name, seed, cvfolds):
+def predict_groupkfold_ML(data, label, features, group_label, clf, seed, cvfolds):
 
 	X = data.loc[:,features]
 	Y = data.loc[:,[label]]
 	G = data.loc[:, group_label]
 
-	gkf = StratifiedGroupKFold(cvfolds)
+	gkf = StratifiedGroupKFold(cvfolds, random_state=seed)
 
 	predicted_probability = []
 	true_label = []
@@ -90,7 +103,7 @@ def predict_groupkfold_RS(data, label, features, group_label, sign, score_name,s
 	Y = data.loc[:,[label]]
 	G = data.loc[:, group_label]
 
-	gkf = StratifiedGroupKFold(cvfolds)
+	gkf = StratifiedGroupKFold(cvfolds, random_state=seed)
 
 	predicted_probability = []
 	true_label = []

@@ -72,6 +72,34 @@ class FillnaDatabase(luigi.Task):
 		return {"pickle": luigi.LocalTarget(os.path.join(tmp_path,self.__class__.__name__, "df_fillna.pickle")),
 				"xls": luigi.LocalTarget(os.path.join(tmp_path,self.__class__.__name__, "df_fillna.xls"))}
 
+class ExternalValidation(luigi.Task):
+	clf_name = luigi.Parameter()
+	wf_name = luigi.Parameter()
+
+	def requires(self):
+		return FillnaDatabase()
+
+	def run(self):
+		df_input = pd.read_pickle(self.input()["pickle"].path)
+		df_filtered = WF_info[self.wf_name]["filter_function"](df_input)
+		df_validation = WF_info[self.wf_name]["validation_filter"](df_input)
+		features = WF_info[self.wf_name]["feature_list"]
+		label = WF_info[self.wf_name]["label_name"]
+		group_label = WF_info[self.wf_name]["group_label"]
+		clf = ML_info[self.clf_name]["clf"]
+
+		tl_pp_dict = external_validation(data, external_data, label, features, clf)
+
+		with open(self.output().path, 'wb') as f:
+			# Pickle the 'data' dictionary using the highest protocol available.
+			pickle.dump(tl_pp_dict, f, pickle.HIGHEST_PROTOCOL)
+
+	def output(self):
+		try:
+			os.makedirs(os.path.join(tmp_path,self.__class__.__name__))
+		except:
+			pass
+		return luigi.LocalTarget(os.path.join(tmp_path,self.__class__.__name__,f"ExternalValidation_PredProb_{self.wf_name}_{self.clf_name}_{self.seed}.dict"))
 
 class CalculateKFold(luigi.Task):
 
@@ -99,9 +127,9 @@ class CalculateKFold(luigi.Task):
 				clf = ML_info[self.clf_name]["clf"]
 
 				if group_label is None:
-					tl_pp_dict = predict_kfold_ML(df_filtered, label, features, clf, self.clf_name, self.seed, self.folds)
+					tl_pp_dict = predict_kfold_ML(df_filtered, label, features, clf, self.seed, self.folds)
 				else:
-					 tl_pp_dict = predict_groupkfold_ML(df_filtered, label, features, group_label, clf, self.clf_name, self.seed, self.folds)
+					 tl_pp_dict = predict_groupkfold_ML(df_filtered, label, features, group_label, clf, self.seed, self.folds)
 
 		with open(self.output().path, 'wb') as f:
 			# Pickle the 'data' dictionary using the highest protocol available.
@@ -304,7 +332,10 @@ class FinalModelAndHyperparameterResults(luigi.Task):
 			self.clf.fit(X,Y)
 		else:
 			G = df_filtered.loc[:,[group_label]]
-			self.clf.fit(X,Y,groups=G)
+			try:
+				self.clf.fit(X,Y,groups=G)
+			else:
+				self.clf.fit(X,Y)
 
 
 		try:
