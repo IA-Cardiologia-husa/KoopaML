@@ -1,38 +1,48 @@
+import numpy as np
+
 import sklearn.ensemble as sk_en
 import sklearn.naive_bayes as sk_nb
+import sklearn.linear_model as sk_lm
 import sklearn.model_selection as sk_ms
 import sklearn.feature_selection as sk_fs
 import xgboost as xgb
+import eli5
 
 
 class FeatureSelecter:
-	def __init__(self,method='sfm_rf',clf=None):
-		self.method= method
+	def __init__(self,method='sfm_rf',clf=None, n_vars = None):
+		self.n_vars = n_vars
+		self.method = method
 		#print("Metodo elegido:", self.method)
-		if(method=='sfm_rf'): 
-			self.clf = sk_en.RandomForestClassifier(n_estimators = 1000,  max_features = 'auto')
-		elif(method=='sfm_xgb'): 
-			self.clf = xgb.XGBClassifier(n_estimators=10000)
+		if(method=='sfm_rf'):
+			self.clf = sk_en.RandomForestClassifier(n_estimators = 100,  max_features = 'auto')
+		elif(method=='sfm_xgb'):
+			self.clf = xgb.XGBClassifier(n_estimators=100)
 		elif(self.method=='sv_gnb'):
 			self.clf = sk_nb.GaussianNB()
-		elif(self.method=='skb_10'):
-			self.clf = sk_fs.SelectKBest(score_func=sk_fs.f_classif, k=10)
+		elif(self.method=='skb'):
+			self.clf = sk_fs.SelectKBest(score_func=sk_fs.f_classif, k=self.n_vars)
 		elif(self.method=='eli5_rfe'):
+			if(self.n_vars is None):
+				self.n_vars=10
 			if(clf==None):
-				base_clf = sk_en.RandomForestClassifier(n_estimators = 100,  max_features = 'auto')
+				base_clf = sk_lm.LogisticRegression()
 			else:
 				base_clf = clf
-			eli5_estimator = eli5.sklearn.PermutationImportance(base_clf, cv=5, refit = False)
-			self.clf = sk_fs.RFE(eli5_estimator, n_features_to_select=10, step=0.2)
+			eli5_estimator = eli5.sklearn.PermutationImportance(base_clf, cv=10)
+			self.clf = sk_fs.RFE(eli5_estimator, n_features_to_select=self.n_vars, step=1)
 	def transform(self,X):
-		if((self.method=='sfm_rf')or(self.method=='sfm_xgb')): 
-			return sk_fs.SelectFromModel(self.clf, prefit=True).transform(X)
+		if((self.method=='sfm_rf')or(self.method=='sfm_xgb')):
+			if(self.n_vars is None):
+				return sk_fs.SelectFromModel(self.clf, prefit=True).transform(X)
+			else:
+				return sk_fs.SelectFromModel(self.clf, max_features=self.nvars, thresholds=-np.inf, prefit=True).transform(X)
 		elif(self.method=='sv_gnb'):
 			return X[self.X_columns]
 		elif(self.method=='PCA'):
 			return self.clf.transform(X)
-		elif(self.method=='skb_10'):
-			return self.clf.transform(X) 
+		elif(self.method=='skb'):
+			return self.clf.transform(X)
 		elif(self.method=='eq'):
 			return X
 		elif(self.method=='eli5_rfe'):
@@ -49,46 +59,49 @@ class FeatureSelecter:
 			#self.X_columns = seleccion_variables(X,y, 3, 3, self.clf)
 			self.X_columns = seleccion_variables(X,y, 3, 10, gnb)
 
-		elif(self.method=='skb_10'):
+		elif(self.method=='skb'):
 			return self.clf.fit(X,y)
 		elif(self.method=='eli5_rfe'):
 			return self.clf.fit(X,y)
-		return self       
-	def set_params(self, method, clf=None):
+		return self
+	def set_params(self, method, clf=None, n_vars = None):
 		self.method=method
+		self.n_vars=n_vars
 		#print("Metodo elegido:", self.method)
-		if(method=='sfm_rf'): 
+		if(method=='sfm_rf'):
 			self.clf = sk_en.RandomForestClassifier(n_estimators = 1000,  max_features = 'auto')
-		elif(method=='sfm_xgb'): 
+		elif(method=='sfm_xgb'):
 			self.clf = xgb.XGBClassifier(n_estimators=10000)
 		elif(self.method=='sv_gnb'):
 			self.clf = sk_nb.GaussianNB()
-		elif(self.method=='skb_10'):
-			self.clf = sk_fs.SelectKBest(score_func=sk_fs.f_classif, k=10)
+		elif(self.method=='skb'):
+			self.clf = sk_fs.SelectKBest(score_func=sk_fs.f_classif, k=self.n_vars)
 		elif(self.method=='eli5_rfe'):
+			if(self.n_vars is None):
+				self.n_vars=10
 			if(clf==None):
-				base_clf = sk_en.RandomForestClassifier(n_estimators = 100,  max_features = 'auto')
+				base_clf = sk_lm.LogisticRegression()
 			else:
 				base_clf = clf
-			eli5_estimator = eli5.sklearn.PermutationImportance(base_clf, cv=5)
-			self.clf = sk_fs.RFE(eli5_estimator, n_features_to_select=10, step=1)
-			
+			eli5_estimator = eli5.sklearn.PermutationImportance(base_clf, cv=10)
+			self.clf = sk_fs.RFE(eli5_estimator, n_features_to_select=self.n_vars, step=1)
+
 def seleccion_variables(X,Y, num_splits, num_repeat, clf):
 	X=pd.DataFrame(X)
 	Y=pd.DataFrame(Y)
 	Yy=Y.astype(bool).values.ravel()
-	
+
 	X_columns = list(X.columns)
 	seed = 1
-	
+
 	bestscore=0
-	
+
 	for j in range(0, 5):
 		#print(f'Ordenacion{j}/5', flush=True)
 		sc_columns=[]
 		score=0.5
-			   
-		
+
+
 		for i in range(1,len(X_columns)+1):
 			var_sel= X_columns[0:i]
 			score_old = score
@@ -113,6 +126,6 @@ def seleccion_variables(X,Y, num_splits, num_repeat, clf):
 		keydict = dict(zip(X_columns, sc_columns))
 		while(keydict[X_columns[-1]]<0): X_columns.pop()
 		X_columns.sort(key=keydict.get, reverse=True)
-		
+
 	print(f'SelecciÃ³n({bestscore}):', bestcolumns)
-	return bestcolumns 
+	return bestcolumns
