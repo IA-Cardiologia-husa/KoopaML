@@ -358,15 +358,15 @@ def external_validation_analyze():
 	return (unfolded_pred_prob,unfolded_true_label, results_dict)
 
 
-def paired_ttest(req_name1, req_name2, xlsname, tmp_folder,maxseed):
+def paired_ttest(req_name1, req_name2, xlsname, tmp_folder):
 
 	n_reps=maxseed
 	n_repfolds=0
 	score=0
 	score2=0
-	for seed in range(0,maxseed):
-		with open(req_name1.input()[seed].path, 'rb') as f1:
-			with open(req_name2.input()[seed].path, 'rb') as f2:
+	for input_file_1, input_file_2 in zip(req_name1.input(), req_name2.input()):
+		with open(input_file_1.path, 'rb') as f1:
+			with open(input_file_2.path, 'rb') as f2:
 				rp_dict1=pickle.load(f1)
 				rp_dict2=pickle.load(f2)
 

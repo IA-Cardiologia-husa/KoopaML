@@ -106,7 +106,6 @@ class CalculateKFold(luigi.Task):
 	seed = luigi.IntParameter()
 	clf_name = luigi.Parameter()
 	wf_name = luigi.Parameter()
-	folds = luigi.IntParameter(default=10)
 
 	def requires(self):
 		return FillnaDatabase()
@@ -124,12 +123,14 @@ class CalculateKFold(luigi.Task):
 				features = WF_info[self.wf_name]["feature_list"]
 				label = WF_info[self.wf_name]["label_name"]
 				group_label = WF_info[self.wf_name]["group_label"]
+				cv_type = WF_info[self.wf_name]["validation_type"]
+				folds = WF_info[self.wf_name]["cv_folds"]
 				clf = ML_info[self.clf_name]["clf"]
 
 				if group_label is None:
-					tl_pp_dict = predict_kfold_ML(df_filtered, label, features, clf, self.seed, self.folds)
+					tl_pp_dict = predict_kfold_ML(df_filtered, label, features, cv_type, clf, self.seed, folds)
 				else:
-					 tl_pp_dict = predict_groupkfold_ML(df_filtered, label, features, group_label, clf, self.seed, self.folds)
+					 tl_pp_dict = predict_groupkfold_ML(df_filtered, label, features, group_label, cv_type, clf, self.seed, folds)
 
 		with open(self.output().path, 'wb') as f:
 			# Pickle the 'data' dictionary using the highest protocol available.
@@ -233,8 +234,8 @@ class EvaluateRiskScore(luigi.Task):
 		if WF_info[self.wf_name]['validation_type'] == 'external_validation':
 			yield ExternalValidation(wf_name=self.wf_name,clf_name=self.clf_name)
 		else:
-			for i in range(1,self.repetitions+1):
-				yield RiskScore_KFold(wf_name=self.wf_name, seed=i,score_name=self.score_name, folds=self.folds)
+			for i in range(1,WF_info[self.wf_name]['cv_repetitions']+1):
+				yield RiskScore_KFold(wf_name=self.wf_name, seed=i,score_name=self.score_name)
 
 	def run(self):
 		try:
@@ -377,7 +378,7 @@ class AllModels_PairedTTest(luigi.Task):
 			for clf_or_score1 in self.list_ML+self.list_RS:
 				for clf_or_score2 in self.list_ML+self.list_RS:
 					if (clf_or_score1 != clf_or_score2):
-						(averaging_diff, pvalue) = paired_ttest(self.requires()[clf_or_score1],self.requires()[clf_or_score2], self.wf_name, tmp_path, self.repetitions)
+						(averaging_diff, pvalue) = paired_ttest(self.requires()[clf_or_score1],self.requires()[clf_or_score2], self.wf_name, tmp_path)
 						if clf_or_score1 in self.list_ML:
 							formal_name1 = ML_info[clf_or_score1]["formal_name"]
 						else:
@@ -603,7 +604,7 @@ class BestRSReport(luigi.Task):
 	def requires(self):
 		requirements = {}
 		for i in self.list_RS:
-			requirements[i] = EvaluateRiskScore(score_name = i, wf_name = self.wf_name
+			requirements[i] = EvaluateRiskScore(score_name = i, wf_name = self.wf_name)
 			requirements[i+'_threshold'] = AllThresholds(clf_or_score = i, wf_name = self.wf_name, list_RS=self.list_RS)
 			requirements[i+'_hanley'] = ConfidenceIntervalHanleyRS(score_name = i, wf_name = self.wf_name)
 		return requirements
