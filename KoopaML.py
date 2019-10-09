@@ -147,7 +147,6 @@ class RiskScore_KFold(luigi.Task):
 	seed = luigi.IntParameter()
 	score_name = luigi.Parameter()
 	wf_name = luigi.Parameter()
-	folds = luigi.IntParameter(default=10)
 
 	def requires(self):
 		return FillnaDatabase()
@@ -164,13 +163,15 @@ class RiskScore_KFold(luigi.Task):
 				label = WF_info[self.wf_name]["label_name"]
 				features = WF_info[self.wf_name]["feature_list"]
 				group_label = WF_info[self.wf_name]["group_label"]
+				cv_type = WF_info[self.wf_name]["validation_type"]
+				folds = WF_info[self.wf_name]["cv_folds"]
 				sign = RS_info[self.score_name]["sign"]
 				RS_name = RS_info[self.score_name]["label_name"]
 
 				if group_label is None:
-					tl_pp_dict = predict_kfold_RS(df_filtered, label, features, sign, RS_name, self.seed, self.folds)
+					tl_pp_dict = predict_kfold_RS(df_filtered, label, features, sign, RS_name, self.seed, folds)
 				else:
-					tl_pp_dict = predict_groupkfold_RS(df_filtered, label, features, group_label, sign, RS_name, self.seed, self.folds)
+					tl_pp_dict = predict_groupkfold_RS(df_filtered, label, features, group_label, cv_type, sign, RS_name, self.seed, folds)
 
 		with open(self.output().path, 'wb') as f:
 			# Pickle the 'data' dictionary using the highest protocol available.
@@ -188,12 +189,13 @@ class Evaluate_ML(luigi.Task):
 
 	clf_name = luigi.Parameter()
 	wf_name = luigi.Parameter()
-	repetitions = luigi.IntParameter(default=10)
-	folds = luigi.IntParameter(default=10)
 
 	def requires(self):
-		for i in range(1,self.repetitions+1):
-			yield CalculateKFold(wf_name=self.wf_name, seed=i,clf_name=self.clf_name, folds=self.folds)
+		if WF_info[self.wf_name]['validation_type'] == 'external_validation':
+			yield ExternalValidation(wf_name=self.wf_name,clf_name=self.clf_name)
+		else:
+			for i in range(1,WF_info[self.wf_name]['cv_repetitions']+1):
+				yield CalculateKFold(wf_name=self.wf_name, seed=i,clf_name=self.clf_name)
 
 	def run(self):
 		try:
@@ -226,12 +228,13 @@ class Evaluate_ML(luigi.Task):
 class EvaluateRiskScore(luigi.Task):
 	wf_name = luigi.Parameter()
 	score_name = luigi.Parameter()
-	repetitions = luigi.IntParameter(default=10)
-	folds = luigi.IntParameter(default=10)
 
 	def requires(self):
-		for i in range(1,self.repetitions+1):
-			yield RiskScore_KFold(wf_name=self.wf_name, seed=i,score_name=self.score_name, folds=self.folds)
+		if WF_info[self.wf_name]['validation_type'] == 'external_validation':
+			yield ExternalValidation(wf_name=self.wf_name,clf_name=self.clf_name)
+		else:
+			for i in range(1,self.repetitions+1):
+				yield RiskScore_KFold(wf_name=self.wf_name, seed=i,score_name=self.score_name, folds=self.folds)
 
 	def run(self):
 		try:
@@ -357,17 +360,15 @@ class FinalModelAndHyperparameterResults(luigi.Task):
 
 class AllModels_PairedTTest(luigi.Task):
 	wf_name = luigi.Parameter()
-	repetitions = luigi.IntParameter(default=10)
-	folds = luigi.IntParameter(default=10)
 	list_ML = luigi.ListParameter()
 	list_RS = luigi.ListParameter()
 
 	def requires(self):
 		requirements={}
 		for clf_or_score1 in self.list_RS:
-			requirements[clf_or_score1] = EvaluateRiskScore(wf_name=self.wf_name, score_name = clf_or_score1, repetitions=self.repetitions, folds=self.folds)
+			requirements[clf_or_score1] = EvaluateRiskScore(wf_name=self.wf_name, score_name = clf_or_score1)
 		for clf_or_score2 in self.list_ML:
-			requirements[clf_or_score2] = Evaluate_ML(wf_name=self.wf_name, clf_name=clf_or_score2, repetitions=self.repetitions, folds=self.folds)
+			requirements[clf_or_score2] = Evaluate_ML(wf_name=self.wf_name, clf_name=clf_or_score2)
 		return requirements
 
 	def run(self):
@@ -398,8 +399,6 @@ class AllModels_PairedTTest(luigi.Task):
 class GraphsWF(luigi.Task):
 
 	wf_name = luigi.Parameter()
-	repetitions = luigi.IntParameter(default=10)
-	folds = luigi.IntParameter(default=10)
 	list_ML = luigi.ListParameter()
 	list_RS = luigi.ListParameter()
 	n_best_ML = luigi.IntParameter(default=1)
@@ -408,9 +407,9 @@ class GraphsWF(luigi.Task):
 	def requires(self):
 		requirements = {}
 		for i in self.list_ML:
-			requirements[i] = Evaluate_ML(clf_name = i, wf_name = self.wf_name, repetitions = self.repetitions, folds=self.folds)
+			requirements[i] = Evaluate_ML(clf_name = i, wf_name = self.wf_name)
 		for i in self.list_RS:
-			requirements[i] = EvaluateRiskScore(score_name = i, wf_name = self.wf_name, repetitions = self.repetitions, folds=self.folds)
+			requirements[i] = EvaluateRiskScore(score_name = i, wf_name = self.wf_name)
 		return requirements
 
 	def run(self):
@@ -466,17 +465,15 @@ class GraphsWF(luigi.Task):
 class ThresholdPoints(luigi.Task):
 	clf_or_score=luigi.Parameter()
 	wf_name = luigi.Parameter()
-	repetitions = luigi.IntParameter(default=10)
-	folds = luigi.IntParameter(default=10)
 	list_RS = luigi.ListParameter(default=[])
 	list_ML = luigi.ListParameter(default=[])
 
 
 	def requires(self):
 		if (self.clf_or_score in self.list_RS):
-			return EvaluateRiskScore(wf_name=self.wf_name, score_name = self.clf_or_score, repetitions=self.repetitions,folds = self.folds)
+			return EvaluateRiskScore(wf_name=self.wf_name, score_name = self.clf_or_score)
 		elif (self.clf_or_score in self.list_ML):
-			return Evaluate_ML(wf_name=self.wf_name, clf_name=self.clf_or_score, repetitions=self.repetitions,folds = self.folds)
+			return Evaluate_ML(wf_name=self.wf_name, clf_name=self.clf_or_score)
 		else:
 			raise Exception(f"{self.clf_score} not in list_ristkscores or list_MLmodels")
 
@@ -545,16 +542,14 @@ class ThresholdPoints(luigi.Task):
 
 class BestMLModelReport(luigi.Task):
 	wf_name = luigi.Parameter()
-	repetitions = luigi.IntParameter(default=10)
-	folds = luigi.IntParameter(default=10)
 	list_ML = luigi.ListParameter()
 
 	def requires(self):
 		requirements = {}
 		requirements['fillna_DB'] = FillnaDatabase()
 		for i in self.list_ML:
-			requirements[i] = Evaluate_ML(clf_name = i, wf_name = self.wf_name, repetitions = self.repetitions, folds = self.folds)
-			requirements[i+'_threshold'] = ThresholdPoints(clf_or_score = i, wf_name = self.wf_name, repetitions = self.repetitions, folds = self.folds, list_ML = self.list_ML)
+			requirements[i] = Evaluate_ML(clf_name = i, wf_name = self.wf_name)
+			requirements[i+'_threshold'] = ThresholdPoints(clf_or_score = i, wf_name = self.wf_name, list_ML = self.list_ML)
 		return requirements
 
 	def run(self):
@@ -603,15 +598,13 @@ class BestMLModelReport(luigi.Task):
 
 class BestRSReport(luigi.Task):
 	wf_name = luigi.Parameter()
-	repetitions = luigi.IntParameter(default=10)
-	folds = luigi.IntParameter(default=10)
 	list_RS = luigi.ListParameter()
 
 	def requires(self):
 		requirements = {}
 		for i in self.list_RS:
-			requirements[i] = EvaluateRiskScore(score_name = i, wf_name = self.wf_name, repetitions = self.repetitions, folds=self.folds)
-			requirements[i+'_threshold'] = AllThresholds(clf_or_score = i, wf_name = self.wf_name, repetitions = self.repetitions, folds=self.folds, list_RS=self.list_RS)
+			requirements[i] = EvaluateRiskScore(score_name = i, wf_name = self.wf_name
+			requirements[i+'_threshold'] = AllThresholds(clf_or_score = i, wf_name = self.wf_name, list_RS=self.list_RS)
 			requirements[i+'_hanley'] = ConfidenceIntervalHanleyRS(score_name = i, wf_name = self.wf_name)
 		return requirements
 
@@ -675,16 +668,14 @@ class MDAFeatureImportances(luigi.Task):
 class AllThresholds(luigi.Task):
 	clf_or_score=luigi.Parameter()
 	wf_name = luigi.Parameter()
-	repetitions = luigi.IntParameter(default=10)
-	folds = luigi.IntParameter(default=10)
 	list_RS = luigi.ListParameter(default=[])
 	list_ML = luigi.ListParameter(default=[])
 
 	def requires(self):
 		if (self.clf_or_score in self.list_RS):
-			return EvaluateRiskScore(wf_name=self.wf_name, score_name = self.clf_or_score, repetitions=self.repetitions, folds=self.folds)
+			return EvaluateRiskScore(wf_name=self.wf_name, score_name = self.clf_or_score)
 		elif (self.clf_or_score in self.list_ML):
-			return Evaluate_ML(wf_name=self.wf_name, clf_name=self.clf_or_score, repetitions=self.repetitions, folds=self.folds)
+			return Evaluate_ML(wf_name=self.wf_name, clf_name=self.clf_or_score)
 		else:
 			raise Exception(f"{self.clf_score} not in list_ristkscores or list_MLmodels")
 
@@ -710,8 +701,7 @@ class AllThresholds(luigi.Task):
 		return luigi.LocalTarget(os.path.join(tmp_path,self.__class__.__name__, f"Thresholds_{self.wf_name}_{self.clf_or_score}.txt"))
 
 class AllTasks(luigi.Task):
-	repetitions = luigi.IntParameter(default=10)
-	folds = luigi.IntParameter(default=10)
+
 	list_ML = luigi.ListParameter(default=list(ML_info.keys()))
 	list_RS = luigi.ListParameter(default=list(RS_info.keys()))
 	list_WF = luigi.ListParameter(default=list(WF_info.keys()))
@@ -724,10 +714,10 @@ class AllTasks(luigi.Task):
 
 		for it_wf_name in self.list_WF:
 			yield DescriptiveXLS(wf_name = it_wf_name)
-			yield GraphsWF(wf_name = it_wf_name, list_ML=self.list_ML, list_RS=self.list_RS, repetitions = self.repetitions, folds = self.folds)
-			yield BestMLModelReport(wf_name = it_wf_name, list_ML=self.list_ML, repetitions = self.repetitions, folds = self.folds)
-			yield BestRSReport(wf_name = it_wf_name, list_RS=self.list_RS, repetitions = self.repetitions, folds = self.folds)
-			yield AllModels_PairedTTest(wf_name = it_wf_name, list_ML=self.list_ML, list_RS=self.list_RS, repetitions = self.repetitions, folds = self.folds)
+			yield GraphsWF(wf_name = it_wf_name, list_ML=self.list_ML, list_RS=self.list_RS)
+			yield BestMLModelReport(wf_name = it_wf_name, list_ML=self.list_ML)
+			yield BestRSReport(wf_name = it_wf_name, list_RS=self.list_RS)
+			yield AllModels_PairedTTest(wf_name = it_wf_name, list_ML=self.list_ML, list_RS=self.list_RS)
 			for it_clf_name in self.list_ML:
 				yield FinalModelAndHyperparameterResults(wf_name = it_wf_name, clf_name = it_clf_name)
 

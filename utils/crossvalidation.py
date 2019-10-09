@@ -1,6 +1,7 @@
 import numpy as np
 import pandas as pd
 import sklearn.model_selection as sk_ms
+import sklearn.utils as sk_u
 import time
 
 from .stratifiedgroupkfold import StratifiedGroupKFold
@@ -18,13 +19,19 @@ def external_validation(data, external_data, label, features, clf):
 
 	return tl_pp_dict
 
-def predict_kfold_ML(data, label, features, clf, seed, cvfolds):
+def predict_kfold_ML(data, label, features, group_label, clf, seed, cvfolds):
 
 
 	X = data.loc[:,features]
 	Y = data.loc[:,[label]].astype(bool)
 
-	skf = sk_ms.StratifiedKFold(cvfolds, random_state=seed, shuffle=True)
+	if(cv_type == 'stratifiedkfold'):
+		skf = sk_ms.StratifiedKFold(cvfolds, random_state=seed, shuffle=True)
+	elif(cv_type == 'kfold'):
+		skf = sk_ms.KFold(cvfolds, random_state=seed, shuffle=True)
+	else:
+		raise('incompatible crossvalidation type')
+
 	predicted_probability = []
 	true_label = []
 
@@ -44,12 +51,18 @@ def predict_kfold_ML(data, label, features, clf, seed, cvfolds):
 	return tl_pp_dict
 
 
-def predict_kfold_RS(data, label, features, sign, score_name,seed, cvfolds):
+def predict_kfold_RS(data, label, features, cv_type, sign, score_name,seed, cvfolds):
 
 	X = data.loc[:, :]
 	Y = data.loc[:,[label]].astype(bool)
 
-	skf = sk_ms.StratifiedKFold(cvfolds, random_state=seed, shuffle=True)
+	if(cv_type == 'stratifiedkfold'):
+		skf = sk_ms.StratifiedKFold(cvfolds, random_state=seed, shuffle=True)
+	elif(cv_type == 'kfold'):
+		skf = sk_ms.KFold(cvfolds, random_state=seed, shuffle=True)
+	else:
+		raise('incompatible crossvalidation type')
+
 	predicted_probability = []
 	true_label = []
 
@@ -64,13 +77,19 @@ def predict_kfold_RS(data, label, features, sign, score_name,seed, cvfolds):
 
 	return tl_pp_dict
 
-def predict_groupkfold_ML(data, label, features, group_label, clf, seed, cvfolds):
+def predict_groupkfold_ML(data, label, features, group_label, cv_type, clf, seed, cvfolds):
 
 	X = data.loc[:,features]
 	Y = data.loc[:,[label]].astype(bool)
 	G = data.loc[:, group_label]
 
-	gkf = StratifiedGroupKFold(cvfolds, random_state=seed, shuffle=True)
+	if (cv_type == 'stratifiedgroupkfold'):
+		gkf = StratifiedGroupKFold(cvfolds, random_state=seed, shuffle=True)
+	elif (cv_type == 'groupkfold'):
+		X, Y, G = sk_u.shuffle(X,Y,G, random_state=seed)
+		gkf = GroupKFold(cvfolds)
+	else:
+		raise('incompatible crossvalidation type')
 
 	predicted_probability = []
 	true_label = []
@@ -97,13 +116,19 @@ def predict_groupkfold_ML(data, label, features, group_label, clf, seed, cvfolds
 
 	return tl_pp_dict
 
-def predict_groupkfold_RS(data, label, features, group_label, sign, score_name,seed, cvfolds):
+def predict_groupkfold_RS(data, label, features, group_label, cv_type, sign, score_name,seed, cvfolds):
 
 	X = data.loc[:,:]
 	Y = data.loc[:,[label]].astype(bool)
 	G = data.loc[:, group_label]
 
-	gkf = StratifiedGroupKFold(cvfolds, random_state=seed, shuffle=True)
+	if (cv_type == 'stratifiedgroupkfold'):
+		gkf = StratifiedGroupKFold(cvfolds, random_state=seed, shuffle=True)
+	elif (cv_type == 'groupkfold'):
+		X, Y, G = sk_u.shuffle(X,Y,G, random_state=seed)
+		gkf = GroupKFold(cvfolds)
+	else:
+		raise('incompatible crossvalidation type')
 
 	predicted_probability = []
 	true_label = []

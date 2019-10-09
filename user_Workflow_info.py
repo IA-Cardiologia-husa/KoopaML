@@ -9,18 +9,23 @@
 # 					In case we want no filter, we have to write: lambda df: df
 # group_label:		groups for cross-validation. Subjects from the same groups
 #					will appear in the same folds
-# cross_validation:	This can be True or False
-# cv_folds:			For "cross-validation", the number of folds
-# cv_repetitions:	For "cross-validation", the number of repetitions
-# external_validation: True or False
-# validation_filter:For external validation, function to filter the database
+# validation_type: 	"kfold", "groupkfold", "stratifiedkfold", "stratifiedgroupkfold",
+#					"external_validation"
+# cv_folds:			For kfolds, the number of folds
+# cv_repetitions:	For kfolds, the number of repetitions
+# validation_filter:For external validation, lambda function to filter the database
 #
 # Example:
 #
 # WF_info['TallHeart'] = {'formal_title': 'Prediction of Heart Attack in tall patients',
 #						  'label_name': 'Heart Attack',
 #						  'feature_list': ['Age','Height','Weight','Arterial Tension'],
-#						  'filter_funtion': lambda df: df.loc[df['Height']>200].reset_index(drop=True)
+#						  'filter_funtion': lambda df: df.loc[df['Height']>200].reset_index(drop=True),
+#						  'group_label': None,
+#						  'validation_type':'stratifiedkfold',
+#						  'cv_folds': 10,
+#						  'cv_repetitions': 10,
+#						  'validation_filter': None}
 
 
 WF_info ={}
