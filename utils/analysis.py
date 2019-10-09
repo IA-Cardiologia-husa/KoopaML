@@ -314,12 +314,12 @@ def group_files_analyze(task_requires, clf_name):
 			# Pickle the 'data' dictionary using the highest protocol available.
 			rp_dict=pickle.load(f)
 
-		for fold in range(len(rp_dict['pred_prob'])):
+		for true_label, pred_prob in zip(rp_dict['true_label'], rp_dict['pred_prob']):
 			n_repfolds+=1
-			score+=sk_m.roc_auc_score(rp_dict['true_label'][fold],rp_dict['pred_prob'][fold])
-			score2+=sk_m.roc_auc_score(rp_dict['true_label'][fold],rp_dict['pred_prob'][fold])**2
-			unfolded_true_label+=list(rp_dict['true_label'][fold])
-			unfolded_pred_prob+=list(rp_dict['pred_prob'][fold])
+			score+=sk_m.roc_auc_score(true_label,pred_prob)
+			score2+=sk_m.roc_auc_score(true_label,pred_prob)**2
+			unfolded_true_label+=list(true_label)
+			unfolded_pred_prob+=list(pred_prob)
 
 	n_folds=n_repfolds/n_reps
 

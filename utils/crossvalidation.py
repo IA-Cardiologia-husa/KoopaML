@@ -11,7 +11,8 @@ def external_validation_RS(data, external_data, label, score_label, sign):
 	Y = external_data.loc[:,[label]]
 	S = sign*external_data.loc[:,[score_label]]
 
-	tl_pp_dict={"true_label":list(Y), "pred_prob":list(S)}
+	#Saved as a list of lists because of compatibility with predict_kfold
+	tl_pp_dict={"true_label":[list(Y.values)], "pred_prob":[list(S.values)]}
 
 	return tl_pp_dict
 
@@ -22,9 +23,10 @@ def external_validation(data, external_data, label, features, clf):
 	external_X = external_data.loc[:,features]
 	external_Y = external_data.loc[:,[label]]
 
-	external_Y_prob = clf.fit(X, Y).predict_proba(external_X)
+	external_Y_prob = clf.fit(X, Y).predict_proba(external_X)[:,1]
 
-	tl_pp_dict={"true_label":list(external_Y), "pred_prob":list(external_Y_prob)}
+	#Saved as a list of lists because of compatibility with predict_kfold
+	tl_pp_dict={"true_label":[list(external_Y.values)], "pred_prob":[list(external_Y_prob)]}
 
 	return tl_pp_dict
 

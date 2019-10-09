@@ -7,7 +7,7 @@ import pickle
 import luigi
 import contextlib
 
-from utils.crossvalidation import predict_kfold_ML, predict_kfold_RS, predict_groupkfold_ML, predict_groupkfold_RS
+from utils.crossvalidation import predict_kfold_ML, predict_kfold_RS, predict_groupkfold_ML, predict_groupkfold_RS, external_validation, external_validation_RS
 from utils.analysis import AUC_stderr_classic,AUC_stderr_hanley, group_files_analyze, mdaeli5_analysis, plot_all_aucs, paired_ttest, cutoff_threshold_maxfbeta, cutoff_threshold_single, cutoff_threshold_double, cutoff_threshold_triple,cutoff_threshold_accuracy, all_thresholds, create_descriptive_xls
 from user_data_utils import load_database, clean_database, process_database, fillna_database
 from user_MLmodels_info import ML_info
@@ -88,7 +88,7 @@ class ExternalValidation(luigi.Task):
 		group_label = WF_info[self.wf_name]["group_label"]
 		clf = ML_info[self.clf_name]["clf"]
 
-		tl_pp_dict = external_validation(data, external_data, label, features, clf)
+		tl_pp_dict = external_validation(df_filtered, df_validation, label, features, clf)
 
 		with open(self.output().path, 'wb') as f:
 			# Pickle the 'data' dictionary using the highest protocol available.
@@ -99,9 +99,9 @@ class ExternalValidation(luigi.Task):
 			os.makedirs(os.path.join(tmp_path,self.__class__.__name__))
 		except:
 			pass
-		return luigi.LocalTarget(os.path.join(tmp_path,self.__class__.__name__,f"ExternalValidation_PredProb_{self.wf_name}_{self.clf_name}_{self.seed}.dict"))
+		return luigi.LocalTarget(os.path.join(tmp_path,self.__class__.__name__,f"ExternalValidation_PredProb_{self.wf_name}_{self.clf_name}.dict"))
 
-class ExternalValidation(luigi.Task):
+class ExternalValidationRS(luigi.Task):
 	score_name = luigi.Parameter()
 	wf_name = luigi.Parameter()
 
@@ -118,7 +118,7 @@ class ExternalValidation(luigi.Task):
 		score_label = RS_info[self.score_name]["label_name"]
 		sign = RS_info[self.score_name]["sign"]
 
-		tl_pp_dict = external_validation(data, external_data, label, score_label)
+		tl_pp_dict = external_validation_RS(df_filtered, df_validation, label, score_label, sign)
 
 		with open(self.output().path, 'wb') as f:
 			# Pickle the 'data' dictionary using the highest protocol available.
@@ -605,7 +605,7 @@ class BestMLModelReport(luigi.Task):
 			f.write(f"AUC stderr: {best_ml_results_dict['avg_auc_stderr']}\n")
 			f.write(f"Confidence Interval (95%): {best_ml_results_dict['95ci_low']}-{best_ml_results_dict['95ci_high']}\n")
 			f.write("\n")
-			with open(self.input()[best_ml+'_threshold'].path, 'rb') as f2:
+			with open(self.input()[best_ml+'_threshold'].path, 'r') as f2:
 				for line in f2.readlines():
 					f.write(line)
 
@@ -616,7 +616,7 @@ class BestMLModelReport(luigi.Task):
 
 			prerequisite = MDAFeatureImportances(clf_name = best_ml, wf_name = self.wf_name)
 			luigi.build([prerequisite], local_scheduler = False)
-			with open(prerequisite.output().path, 'rb') as f3:
+			with open(prerequisite.output().path, 'r') as f3:
 				for line in f3.readlines():
 					f.write(line)
 
@@ -653,16 +653,16 @@ class BestRSReport(luigi.Task):
 		with open(self.input()[best_rs]["auc_results"].path, 'rb') as f:
 			best_rs_results_dict=pickle.load(f)
 
-		with open(self.output().path,'wb') as f:
+		with open(self.output().path,'w') as f:
 			f.write(f"Score name: {RS_info[best_rs]['formal_name']}\n")
 			f.write(f"AUC: {best_rs_results_dict['avg_auc']}\n")
 			f.write(f"AUC stderr: {best_rs_results_dict['avg_auc_stderr']}\n")
 			f.write(f"Confidence Interval Subsampling(95%): {best_rs_results_dict['95ci_low']}- {best_rs_results_dict['95ci_high']}\n")
-			with open(self.input()[best_rs+'_hanley'].path, 'rb') as f2:
+			with open(self.input()[best_rs+'_hanley'].path, 'r') as f2:
 				for line in f2.readlines():
 					f.write(line)
 			f.write("\n")
-			with open(self.input()[best_rs+'_threshold'].path, 'rb') as f3:
+			with open(self.input()[best_rs+'_threshold'].path, 'r') as f3:
 				for line in f3.readlines():
 					f.write(line)
 	def output(self):
