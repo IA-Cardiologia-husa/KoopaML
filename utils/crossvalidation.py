@@ -6,6 +6,15 @@ import time
 
 from .stratifiedgroupkfold import StratifiedGroupKFold
 
+def external_validation_RS(data, external_data, label, score_label, sign):
+
+	Y = external_data.loc[:,[label]]
+	S = sign*external_data.loc[:,[score_label]]
+
+	tl_pp_dict={"true_label":list(Y), "pred_prob":list(S)}
+
+	return tl_pp_dict
+
 def external_validation(data, external_data, label, features, clf):
 	X = data.loc[:,features]
 	Y = data.loc[:,[label]]

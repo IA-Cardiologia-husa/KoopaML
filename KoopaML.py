@@ -101,6 +101,36 @@ class ExternalValidation(luigi.Task):
 			pass
 		return luigi.LocalTarget(os.path.join(tmp_path,self.__class__.__name__,f"ExternalValidation_PredProb_{self.wf_name}_{self.clf_name}_{self.seed}.dict"))
 
+class ExternalValidation(luigi.Task):
+	score_name = luigi.Parameter()
+	wf_name = luigi.Parameter()
+
+	def requires(self):
+		return FillnaDatabase()
+
+	def run(self):
+		df_input = pd.read_pickle(self.input()["pickle"].path)
+		df_filtered = WF_info[self.wf_name]["filter_function"](df_input)
+		df_validation = WF_info[self.wf_name]["validation_filter"](df_input)
+		features = WF_info[self.wf_name]["feature_list"]
+		label = WF_info[self.wf_name]["label_name"]
+		group_label = WF_info[self.wf_name]["group_label"]
+		score_label = RS_info[self.score_name]["label_name"]
+		sign = RS_info[self.score_name]["sign"]
+
+		tl_pp_dict = external_validation(data, external_data, label, score_label)
+
+		with open(self.output().path, 'wb') as f:
+			# Pickle the 'data' dictionary using the highest protocol available.
+			pickle.dump(tl_pp_dict, f, pickle.HIGHEST_PROTOCOL)
+
+	def output(self):
+		try:
+			os.makedirs(os.path.join(tmp_path,self.__class__.__name__))
+		except:
+			pass
+		return luigi.LocalTarget(os.path.join(tmp_path,self.__class__.__name__,f"ExternalValidation_PredProb_{self.wf_name}_{self.score_name}.dict"))
+
 class CalculateKFold(luigi.Task):
 
 	seed = luigi.IntParameter()
@@ -232,7 +262,7 @@ class EvaluateRiskScore(luigi.Task):
 
 	def requires(self):
 		if WF_info[self.wf_name]['validation_type'] == 'external_validation':
-			yield ExternalValidation(wf_name=self.wf_name,clf_name=self.clf_name)
+			yield ExternalValidationRS(wf_name=self.wf_name,score_name=self.score_name)
 		else:
 			for i in range(1,WF_info[self.wf_name]['cv_repetitions']+1):
 				yield RiskScore_KFold(wf_name=self.wf_name, seed=i,score_name=self.score_name)
@@ -279,12 +309,12 @@ class ConfidenceIntervalHanleyRS(luigi.Task):
 
 
 		with open(self.output().path,'w') as f:
-			f.write(f"Confidence Interval Upper Bound Classic(95%): {auc} ({ci95_low}-{ci95_high})")
+			f.write(f"Confidence Interval Upper Bound Classic(95%): {auc} ({ci95_low}-{ci95_high})\n")
 
 			(auc, stderr) = AUC_stderr_hanley(df_input , label_name=WF_info[self.wf_name]["label_name"], score_name=RS_info[self.score_name]["label_name"])
 			ci95_low= auc-1.96*stderr
 			ci95_high= auc+1.96*stderr
-			f.write(f"Confidence Interval Hanley(95%): {ci95_low}-{ci95_high}")
+			f.write(f"Confidence Interval Hanley(95%): {ci95_low}-{ci95_high}\n")
 	def output(self):
 		try:
 			os.makedirs(os.path.join(tmp_path, self.__class__.__name__))
@@ -388,7 +418,7 @@ class AllModels_PairedTTest(luigi.Task):
 						else:
 							formal_name2 = RS_info[clf_or_score2]["formal_name"]
 						wf_formal_title = WF_info[self.wf_name]["formal_title"]
-						f.write(f"{wf_formal_title}: {formal_name1}-{formal_name2}, Avg Diff: {averaging_diff}, p-value: {pvalue}")
+						f.write(f"{wf_formal_title}: {formal_name1}-{formal_name2}, Avg Diff: {averaging_diff}, p-value: {pvalue}\n")
 
 	def output(self):
 		try:
@@ -486,53 +516,53 @@ class ThresholdPoints(luigi.Task):
 
 		with open(self.output().path,'w') as f:
 			(best_threshold, tprate, fprate, tnrate, fnrate, sens, spec, prec, nprv) = cutoff_threshold_accuracy(pred_prob, true_label)
-			f.write(f'Threshold: {best_threshold} Optimum for accuracy')
-			f.write(f'TP:{tprate*100:.1f} FP:{fprate*100:.1f} TN:{tnrate*100:.1f} FN:{fnrate*100:.1f}')
-			f.write(f'Sensitivity:{sens*100:.1f} Specifity:{spec*100:.1f} Precision:{prec*100:.1f} NPRv:{nprv*100:.1f}')
-			f.write("")
+			f.write(f'Threshold: {best_threshold} Optimum for accuracy\n')
+			f.write(f'TP:{tprate*100:.1f} FP:{fprate*100:.1f} TN:{tnrate*100:.1f} FN:{fnrate*100:.1f}\n')
+			f.write(f'Sensitivity:{sens*100:.1f} Specifity:{spec*100:.1f} Precision:{prec*100:.1f} NPRv:{nprv*100:.1f}\n')
+			f.write("\n")
 
 			(best_threshold, tprate, fprate, tnrate, fnrate, sens, spec, prec, nprv) = cutoff_threshold_single(pred_prob, true_label)
-			f.write(f'Threshold: {best_threshold} Optimum for single point AUC')
-			f.write(f'TP:{tprate*100:.1f} FP:{fprate*100:.1f} TN:{tnrate*100:.1f} FN:{fnrate*100:.1f}')
-			f.write(f'Sensitivity:{sens*100:.1f} Specifity:{spec*100:.1f} Precision:{prec*100:.1f} NPRv:{nprv*100:.1f}')
-			f.write("")
+			f.write(f'Threshold: {best_threshold} Optimum for single point AUC\n')
+			f.write(f'TP:{tprate*100:.1f} FP:{fprate*100:.1f} TN:{tnrate*100:.1f} FN:{fnrate*100:.1f}\n')
+			f.write(f'Sensitivity:{sens*100:.1f} Specifity:{spec*100:.1f} Precision:{prec*100:.1f} NPRv:{nprv*100:.1f}\n')
+			f.write("\n")
 
 			threshold_dict = cutoff_threshold_double(pred_prob, true_label)
 			(best_threshold1, tprate1, fprate1, tnrate1, fnrate1, sens1, spec1, prec1, nprv1) = threshold_dict["threshold1"]
 			(best_threshold2, tprate2, fprate2, tnrate2, fnrate2, sens2, spec2, prec2, nprv2) = threshold_dict["threshold2"]
 
-			f.write('Optimum for double point AUC')
-			f.write(f'Threshold: {best_threshold1}')
-			f.write(f'TP:{tprate1*100:.1f} FP:{fprate1*100:.1f} TN:{tnrate1*100:.1f} FN:{fnrate1*100:.1f}')
-			f.write(f'Sensitivity:{sens1*100:.1f} Specifity:{spec1*100:.1f} Precision:{prec1*100:.1f} NPRv:{nprv1*100:.1f}')
-			f.write(f'Threshold: {best_threshold2}')
-			f.write(f'TP:{tprate2*100:.1f} FP:{fprate2*100:.1f} TN:{tnrate2*100:.1f} FN:{fnrate2*100:.1f}')
-			f.write(f'Sensitivity:{sens2*100:.1f} Specifity:{spec2*100:.1f} Precision:{prec2*100:.1f} NPRv:{nprv2*100:.1f}')
-			f.write("")
+			f.write('Optimum for double point AUC\n')
+			f.write(f'Threshold: {best_threshold1}\n')
+			f.write(f'TP:{tprate1*100:.1f} FP:{fprate1*100:.1f} TN:{tnrate1*100:.1f} FN:{fnrate1*100:.1f}\n')
+			f.write(f'Sensitivity:{sens1*100:.1f} Specifity:{spec1*100:.1f} Precision:{prec1*100:.1f} NPRv:{nprv1*100:.1f}\n')
+			f.write(f'Threshold: {best_threshold2}\n')
+			f.write(f'TP:{tprate2*100:.1f} FP:{fprate2*100:.1f} TN:{tnrate2*100:.1f} FN:{fnrate2*100:.1f}\n')
+			f.write(f'Sensitivity:{sens2*100:.1f} Specifity:{spec2*100:.1f} Precision:{prec2*100:.1f} NPRv:{nprv2*100:.1f}\n')
+			f.write("\n")
 
 			threshold_dict = cutoff_threshold_triple(pred_prob, true_label)
 			(best_threshold1, tprate1, fprate1, tnrate1, fnrate1, sens1, spec1, prec1, nprv1) = threshold_dict["threshold1"]
 			(best_threshold2, tprate2, fprate2, tnrate2, fnrate2, sens2, spec2, prec2, nprv2) = threshold_dict["threshold2"]
 			(best_threshold3, tprate3, fprate3, tnrate3, fnrate3, sens3, spec3, prec3, nprv3) = threshold_dict["threshold3"]
 
-			f.write('Optimum for triple point AUC')
-			f.write(f'Threshold: {best_threshold1}')
-			f.write(f'TP:{tprate1*100:.1f} FP:{fprate1*100:.1f} TN:{tnrate1*100:.1f} FN:{fnrate1*100:.1f}')
-			f.write(f'Sensitivity:{sens1*100:.1f} Specifity:{spec1*100:.1f} Precision:{prec1*100:.1f} NPRv:{nprv1*100:.1f}')
-			f.write(f'Threshold: {best_threshold2}')
-			f.write(f'TP:{tprate2*100:.1f} FP:{fprate2*100:.1f} TN:{tnrate2*100:.1f} FN:{fnrate2*100:.1f}')
-			f.write(f'Sensitivity:{sens2*100:.1f} Specifity:{spec2*100:.1f} Precision:{prec2*100:.1f} NPRv:{nprv2*100:.1f}')
-			f.write(f'Threshold: {best_threshold3}')
-			f.write(f'TP:{tprate3*100:.1f} FP:{fprate3*100:.1f} TN:{tnrate3*100:.1f} FN:{fnrate3*100:.1f}')
-			f.write(f'Sensitivity:{sens3*100:.1f} Specifity:{spec3*100:.1f} Precision:{prec3*100:.1f} NPRv:{nprv3*100:.1f}')
-			f.write("")
+			f.write('Optimum for triple point AUC\n')
+			f.write(f'Threshold: {best_threshold1}\n')
+			f.write(f'TP:{tprate1*100:.1f} FP:{fprate1*100:.1f} TN:{tnrate1*100:.1f} FN:{fnrate1*100:.1f}\n')
+			f.write(f'Sensitivity:{sens1*100:.1f} Specifity:{spec1*100:.1f} Precision:{prec1*100:.1f} NPRv:{nprv1*100:.1f}\n')
+			f.write(f'Threshold: {best_threshold2}\n')
+			f.write(f'TP:{tprate2*100:.1f} FP:{fprate2*100:.1f} TN:{tnrate2*100:.1f} FN:{fnrate2*100:.1f}\n')
+			f.write(f'Sensitivity:{sens2*100:.1f} Specifity:{spec2*100:.1f} Precision:{prec2*100:.1f} NPRv:{nprv2*100:.1f}\n')
+			f.write(f'Threshold: {best_threshold3}\n')
+			f.write(f'TP:{tprate3*100:.1f} FP:{fprate3*100:.1f} TN:{tnrate3*100:.1f} FN:{fnrate3*100:.1f}\n')
+			f.write(f'Sensitivity:{sens3*100:.1f} Specifity:{spec3*100:.1f} Precision:{prec3*100:.1f} NPRv:{nprv3*100:.1f}\n')
+			f.write("\n")
 
 			for beta in [0.5,1,2]:
 				(max_f1_threshold, tprate, fprate, tnrate, fnrate, sens, spec, prec, nprv) = cutoff_threshold_maxfbeta(pred_prob, true_label, beta)
-				f.write(f'Threshold: {max_f1_threshold} Optimum for f{beta}')
-				f.write(f'TP:{tprate*100:.1f} FP:{fprate*100:.1f} TN:{tnrate*100:.1f} FN:{fnrate*100:.1f}')
-				f.write(f'Sensitivity:{sens*100:.1f} Specifity:{spec*100:.1f} Precision:{prec*100:.1f} NPRv:{nprv*100:.1f}')
-				f.write("")
+				f.write(f'Threshold: {max_f1_threshold} Optimum for f{beta}\n')
+				f.write(f'TP:{tprate*100:.1f} FP:{fprate*100:.1f} TN:{tnrate*100:.1f} FN:{fnrate*100:.1f}\n')
+				f.write(f'Sensitivity:{sens*100:.1f} Specifity:{spec*100:.1f} Precision:{prec*100:.1f} NPRv:{nprv*100:.1f}\n')
+				f.write("\n")
 
 	def output(self):
 		try:
@@ -570,11 +600,11 @@ class BestMLModelReport(luigi.Task):
 
 
 		with open(self.output().path,'w') as f:
-			f.write(f"Model name: {best_ml}")
-			f.write(f"AUC: {best_ml_results_dict['avg_auc']}")
-			f.write(f"AUC stderr: {best_ml_results_dict['avg_auc_stderr']}")
-			f.write(f"Confidence Interval (95%): {best_ml_results_dict['95ci_low']}-{best_ml_results_dict['95ci_high']}")
-			f.write("")
+			f.write(f"Model name: {best_ml}\n")
+			f.write(f"AUC: {best_ml_results_dict['avg_auc']}\n")
+			f.write(f"AUC stderr: {best_ml_results_dict['avg_auc_stderr']}\n")
+			f.write(f"Confidence Interval (95%): {best_ml_results_dict['95ci_low']}-{best_ml_results_dict['95ci_high']}\n")
+			f.write("\n")
 			with open(self.input()[best_ml+'_threshold'].path, 'rb') as f2:
 				for line in f2.readlines():
 					f.write(line)
@@ -623,15 +653,15 @@ class BestRSReport(luigi.Task):
 		with open(self.input()[best_rs]["auc_results"].path, 'rb') as f:
 			best_rs_results_dict=pickle.load(f)
 
-		with open(self.output().path,'w') as f:
-			f.write(f"Score name: {RS_info[best_rs]['formal_name']}")
-			f.write(f"AUC: {best_rs_results_dict['avg_auc']}")
-			f.write(f"AUC stderr: {best_rs_results_dict['avg_auc_stderr']}")
-			f.write(f"Confidence Interval Subsampling(95%): {best_rs_results_dict['95ci_low']}- {best_rs_results_dict['95ci_high']}")
+		with open(self.output().path,'wb') as f:
+			f.write(f"Score name: {RS_info[best_rs]['formal_name']}\n")
+			f.write(f"AUC: {best_rs_results_dict['avg_auc']}\n")
+			f.write(f"AUC stderr: {best_rs_results_dict['avg_auc_stderr']}\n")
+			f.write(f"Confidence Interval Subsampling(95%): {best_rs_results_dict['95ci_low']}- {best_rs_results_dict['95ci_high']}\n")
 			with open(self.input()[best_rs+'_hanley'].path, 'rb') as f2:
 				for line in f2.readlines():
 					f.write(line)
-			f.write("")
+			f.write("\n")
 			with open(self.input()[best_rs+'_threshold'].path, 'rb') as f3:
 				for line in f3.readlines():
 					f.write(line)
@@ -691,9 +721,9 @@ class AllThresholds(luigi.Task):
 		with open(self.output().path,'w') as f:
 			for i in list_thresholds:
 				(threshold, tprate, fprate, tnrate, fnrate, sens, spec, prec, nprv) = i
-				f.write(f'Threshold: {threshold}')
-				f.write(f'TP:{tprate*100:.1f} FP:{fprate*100:.1f} TN:{tnrate*100:.1f} FN:{fnrate*100:.1f}')
-				f.write(f'Sensitivity:{sens*100:.1f} Specifity:{spec*100:.1f} Precision:{prec*100:.1f} NPRv:{nprv*100:.1f}')
+				f.write(f'Threshold: {threshold}\n')
+				f.write(f'TP:{tprate*100:.1f} FP:{fprate*100:.1f} TN:{tnrate*100:.1f} FN:{fnrate*100:.1f}\n')
+				f.write(f'Sensitivity:{sens*100:.1f} Specifity:{spec*100:.1f} Precision:{prec*100:.1f} NPRv:{nprv*100:.1f}\n')
 	def output(self):
 		try:
 			os.makedirs(os.path.join(tmp_path,self.__class__.__name__))
@@ -724,7 +754,7 @@ class AllTasks(luigi.Task):
 
 	def run(self):
 		with open(self.output().path,'w') as f:
-			f.write("prueba")
+			f.write("prueba\n")
 
 	def output(self):
 		TIMESTRING=dt.datetime.now().strftime("%y%m%d-%H%M%S")

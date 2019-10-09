@@ -360,13 +360,14 @@ def external_validation_analyze():
 
 def paired_ttest(req_name1, req_name2, xlsname, tmp_folder):
 
-	n_reps=maxseed
+	n_reps=0
 	n_repfolds=0
 	score=0
 	score2=0
 	for input_file_1, input_file_2 in zip(req_name1.input(), req_name2.input()):
 		with open(input_file_1.path, 'rb') as f1:
 			with open(input_file_2.path, 'rb') as f2:
+				n_reps+=1
 				rp_dict1=pickle.load(f1)
 				rp_dict2=pickle.load(f2)
 
@@ -387,6 +388,7 @@ def paired_ttest(req_name1, req_name2, xlsname, tmp_folder):
 		std_error = 1e100
 
 	t_statistic = averaging_diff/std_error
+
 
 	pvalue = sc_st.t.sf(np.absolute(t_statistic), df= n_repfolds-1)
 
