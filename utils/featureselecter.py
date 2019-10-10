@@ -10,17 +10,20 @@ import eli5
 
 
 class FeatureSelecter:
-	def __init__(self,method='sfm_rf',clf=None, n_vars = None):
+	def __init__(self,method='skb',clf=None, n_vars = None):
 		self.n_vars = n_vars
 		self.method = method
 		#print("Metodo elegido:", self.method)
-		if(method=='sfm_rf'):
-			self.clf = sk_en.RandomForestClassifier(n_estimators = 100,  max_features = 'auto')
-		elif(method=='sfm_xgb'):
-			self.clf = xgb.XGBClassifier(n_estimators=100)
+		if(method=='sfm'):
+			if(clf==None):
+				self.clf = sk_en.RandomForestClassifier(n_estimators = 100,  max_features = 'auto')
+			else:
+				self.clf = clf
 		elif(self.method=='sv_gnb'):
 			self.clf = sk_nb.GaussianNB()
 		elif(self.method=='skb'):
+			if(self.n_vars is None):
+				self.n_vars=10
 			self.clf = sk_fs.SelectKBest(score_func=sk_fs.f_classif, k=self.n_vars)
 		elif(self.method=='eli5_rfe'):
 			if(self.n_vars is None):
@@ -32,11 +35,11 @@ class FeatureSelecter:
 			eli5_estimator = eli5.sklearn.PermutationImportance(base_clf, cv=10)
 			self.clf = sk_fs.RFE(eli5_estimator, n_features_to_select=self.n_vars, step=1)
 	def transform(self,X):
-		if((self.method=='sfm_rf')or(self.method=='sfm_xgb')):
+		if(self.method=='sfm'):
 			if(self.n_vars is None):
 				return sk_fs.SelectFromModel(self.clf, prefit=True).transform(X)
 			else:
-				return sk_fs.SelectFromModel(self.clf, max_features=self.nvars, thresholds=-np.inf, prefit=True).transform(X)
+				return sk_fs.SelectFromModel(self.clf, max_features=self.n_vars, threshold=-np.inf, prefit=True).transform(X)
 		elif(self.method=='sv_gnb'):
 			return X[self.X_columns]
 		elif(self.method=='PCA'):
@@ -50,9 +53,7 @@ class FeatureSelecter:
 	def fit(self,X,y):
 		if(self.method=='eq'):
 			return self
-		elif(self.method=='sfm_rf'):
-			self.clf = self.clf.fit(X,y)
-		elif(self.method=='sfm_xgb'):
+		elif(self.method=='sfm'):
 			self.clf = self.clf.fit(X,y)
 		elif(self.method=='sv_gnb'):
 			gnb = sk_nb.GaussianNB()
@@ -68,13 +69,16 @@ class FeatureSelecter:
 		self.method=method
 		self.n_vars=n_vars
 		#print("Metodo elegido:", self.method)
-		if(method=='sfm_rf'):
-			self.clf = sk_en.RandomForestClassifier(n_estimators = 1000,  max_features = 'auto')
-		elif(method=='sfm_xgb'):
-			self.clf = xgb.XGBClassifier(n_estimators=10000)
+		if(method=='sfm'):
+			if(clf==None):
+				self.clf = sk_en.RandomForestClassifier(n_estimators = 100,  max_features = 'auto')
+			else:
+				self.clf = clf
 		elif(self.method=='sv_gnb'):
 			self.clf = sk_nb.GaussianNB()
 		elif(self.method=='skb'):
+			if(self.n_vars is None):
+				self.n_vars=10
 			self.clf = sk_fs.SelectKBest(score_func=sk_fs.f_classif, k=self.n_vars)
 		elif(self.method=='eli5_rfe'):
 			if(self.n_vars is None):
