@@ -391,8 +391,8 @@ class FinalModelAndHyperparameterResults(luigi.Task):
 
 class AllModels_PairedTTest(luigi.Task):
 	wf_name = luigi.Parameter()
-	list_ML = luigi.ListParameter()
-	list_RS = luigi.ListParameter()
+	list_ML = luigi.ListParameter(default=list(ML_info.keys()))
+	list_RS = luigi.ListParameter(default=list(RS_info.keys()))
 
 	def requires(self):
 		requirements={}
@@ -430,8 +430,8 @@ class AllModels_PairedTTest(luigi.Task):
 class GraphsWF(luigi.Task):
 
 	wf_name = luigi.Parameter()
-	list_ML = luigi.ListParameter()
-	list_RS = luigi.ListParameter()
+	list_ML = luigi.ListParameter(default=list(ML_info.keys()))
+	list_RS = luigi.ListParameter(default=list(RS_info.keys()))
 	n_best_ML = luigi.IntParameter(default=1)
 	n_best_RS = luigi.IntParameter(default=2)
 
@@ -496,8 +496,8 @@ class GraphsWF(luigi.Task):
 class ThresholdPoints(luigi.Task):
 	clf_or_score=luigi.Parameter()
 	wf_name = luigi.Parameter()
-	list_RS = luigi.ListParameter(default=[])
-	list_ML = luigi.ListParameter(default=[])
+	list_RS = luigi.ListParameter(default=list(RS_info.keys()))
+	list_ML = luigi.ListParameter(default=list(ML_info.keys()))
 
 
 	def requires(self):
@@ -573,7 +573,7 @@ class ThresholdPoints(luigi.Task):
 
 class BestMLModelReport(luigi.Task):
 	wf_name = luigi.Parameter()
-	list_ML = luigi.ListParameter()
+	list_ML = luigi.ListParameter(default=list(ML_info.keys()))
 
 	def requires(self):
 		requirements = {}
@@ -629,7 +629,7 @@ class BestMLModelReport(luigi.Task):
 
 class BestRSReport(luigi.Task):
 	wf_name = luigi.Parameter()
-	list_RS = luigi.ListParameter()
+	list_RS = luigi.ListParameter(default=list(RS_info.keys()))
 
 	def requires(self):
 		requirements = {}
@@ -699,8 +699,8 @@ class MDAFeatureImportances(luigi.Task):
 class AllThresholds(luigi.Task):
 	clf_or_score=luigi.Parameter()
 	wf_name = luigi.Parameter()
-	list_RS = luigi.ListParameter(default=[])
-	list_ML = luigi.ListParameter(default=[])
+	list_RS = luigi.ListParameter(default=list(RS_info.keys()))
+	list_ML = luigi.ListParameter(default=list(ML_info.keys()))
 
 	def requires(self):
 		if (self.clf_or_score in self.list_RS):
