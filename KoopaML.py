@@ -15,10 +15,11 @@ from user_RiskScores_info import RS_info
 from user_Workflow_info import WF_info
 
 # Global variables for path folders
+TIMESTRING=dt.datetime.now().strftime("%y%m%d-%H%M%S")
 log_path = os.path.abspath("log")
 tmp_path = os.path.abspath("intermediate")
 model_path = os.path.abspath("models")
-report_path = os.path.abspath("report")
+report_path = os.path.abspath(f"report-{TIMESTRING}")
 
 #Luigi Tasks
 class CleanDatabase(luigi.Task):
