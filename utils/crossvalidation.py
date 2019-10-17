@@ -30,7 +30,7 @@ def external_validation(data, external_data, label, features, clf):
 
 	return tl_pp_dict
 
-def predict_kfold_ML(data, label, features, group_label, clf, seed, cvfolds):
+def predict_kfold_ML(data, label, features, cv_type, group_label, clf, seed, cvfolds):
 
 
 	X = data.loc[:,features]
