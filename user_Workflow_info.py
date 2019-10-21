@@ -13,7 +13,7 @@
 #					"external_validation"
 # cv_folds:			For kfolds, the number of folds
 # cv_repetitions:	For kfolds, the number of repetitions
-# validation_filter:For external validation, lambda function to filter the database
+# external_validation: 'Yes' or 'No', in case of 'Yes', you have to fill user_external_data_utils.py
 #
 # Example:
 #
@@ -25,7 +25,7 @@
 #						  'validation_type':'stratifiedkfold',
 #						  'cv_folds': 10,
 #						  'cv_repetitions': 10,
-#						  'validation_filter': None}
+#						  'external_validation': 'No'}
 
 
 WF_info ={}

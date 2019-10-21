@@ -10,6 +10,7 @@ import contextlib
 from utils.crossvalidation import predict_kfold_ML, predict_kfold_RS, predict_groupkfold_ML, predict_groupkfold_RS, external_validation, external_validation_RS
 from utils.analysis import AUC_stderr_classic,AUC_stderr_hanley, group_files_analyze, mdaeli5_analysis, plot_all_aucs, paired_ttest, cutoff_threshold_maxfbeta, cutoff_threshold_single, cutoff_threshold_double, cutoff_threshold_triple,cutoff_threshold_accuracy, all_thresholds, create_descriptive_xls
 from user_data_utils import load_database, clean_database, process_database, fillna_database
+from user_external_data_utils import load_external_database, clean_external_database, process_external_database, fillna_external_database
 from user_MLmodels_info import ML_info
 from user_RiskScores_info import RS_info
 from user_Workflow_info import WF_info
@@ -73,23 +74,73 @@ class FillnaDatabase(luigi.Task):
 		return {"pickle": luigi.LocalTarget(os.path.join(tmp_path,self.__class__.__name__, "df_fillna.pickle")),
 				"xls": luigi.LocalTarget(os.path.join(tmp_path,self.__class__.__name__, "df_fillna.xls"))}
 
+class CleanExternalDatabase(luigi.Task):
+	def run(self):
+		df_input = load_external_database()
+		df_output = clean_external_database(df_input)
+		df_output.to_pickle(self.output()["pickle"].path)
+		df_output.to_excel(self.output()["xls"].path, index=False)
+
+	def output(self):
+		try:
+			os.makedirs(os.path.join(tmp_path,self.__class__.__name__))
+		except:
+			pass
+		return {"pickle": luigi.LocalTarget(os.path.join(tmp_path,self.__class__.__name__, "external_df_clean.pickle")),
+				"xls": luigi.LocalTarget(os.path.join(tmp_path,self.__class__.__name__, "external_df_clean.xlsx"))}
+
+class ProcessExternalDatabase(luigi.Task):
+
+	def requires(self):
+		return CleanExternalDatabase()
+	def run(self):
+		df_input = pd.read_pickle(self.input()["pickle"].path)
+		df_output = process_external_database(df_input)
+		df_output.to_pickle(self.output()["pickle"].path)
+		df_output.to_excel(self.output()["xls"].path, index=False)
+
+	def output(self):
+		try:
+			os.makedirs(os.path.join(tmp_path,self.__class__.__name__))
+		except:
+			pass
+		return {"pickle": luigi.LocalTarget(os.path.join(tmp_path,self.__class__.__name__, "external_df_processed.pickle")),
+				"xls": luigi.LocalTarget(os.path.join(tmp_path,self.__class__.__name__, "external_df_processed.xls"))}
+
+class FillnaExternalDatabase(luigi.Task):
+	def requires(self):
+		return ProcessExternalDatabase()
+
+	def run(self):
+		df_input = pd.read_pickle(self.input()["pickle"].path)
+		df_output = fillna_external_database(df_input)
+		df_output.to_pickle(self.output()["pickle"].path)
+		df_output.to_excel(self.output()["xls"].path, index=False)
+
+	def output(self):
+		try:
+			os.makedirs(os.path.join(tmp_path,self.__class__.__name__))
+		except:
+			pass
+		return {"pickle": luigi.LocalTarget(os.path.join(tmp_path,self.__class__.__name__, "external_df_fillna.pickle")),
+				"xls": luigi.LocalTarget(os.path.join(tmp_path,self.__class__.__name__, "external_df_fillna.xls"))}
+
 class ExternalValidation(luigi.Task):
 	clf_name = luigi.Parameter()
 	wf_name = luigi.Parameter()
 
 	def requires(self):
-		return FillnaDatabase()
+		return {'external_data': FillnaExternalDatabase(),
+				'clf': FinalModelAndHyperparameterResults(wf_name = self.wf_name, clf_name = self.clf_name)
 
 	def run(self):
-		df_input = pd.read_pickle(self.input()["pickle"].path)
+		df_input = pd.read_pickle(self.input()["external_data"]["pickle"].path)
 		df_filtered = WF_info[self.wf_name]["filter_function"](df_input)
-		df_validation = WF_info[self.wf_name]["validation_filter"](df_input)
 		features = WF_info[self.wf_name]["feature_list"]
 		label = WF_info[self.wf_name]["label_name"]
-		group_label = WF_info[self.wf_name]["group_label"]
-		clf = ML_info[self.clf_name]["clf"]
+		clf = pd.read_pickle(self.input()["clf"].path)
 
-		tl_pp_dict = external_validation(df_filtered, df_validation, label, features, clf)
+		tl_pp_dict = external_validation(df_filtered, label, features, clf)
 
 		with open(self.output().path, 'wb') as f:
 			# Pickle the 'data' dictionary using the highest protocol available.
@@ -107,19 +158,16 @@ class ExternalValidationRS(luigi.Task):
 	wf_name = luigi.Parameter()
 
 	def requires(self):
-		return FillnaDatabase()
+		return FillnaExternalDatabase()
 
 	def run(self):
 		df_input = pd.read_pickle(self.input()["pickle"].path)
 		df_filtered = WF_info[self.wf_name]["filter_function"](df_input)
-		df_validation = WF_info[self.wf_name]["validation_filter"](df_input)
-		features = WF_info[self.wf_name]["feature_list"]
 		label = WF_info[self.wf_name]["label_name"]
-		group_label = WF_info[self.wf_name]["group_label"]
 		score_label = RS_info[self.score_name]["label_name"]
 		sign = RS_info[self.score_name]["sign"]
 
-		tl_pp_dict = external_validation_RS(df_filtered, df_validation, label, score_label, sign)
+		tl_pp_dict = external_validation_RS(df_filtered, label, score_label, sign)
 
 		with open(self.output().path, 'wb') as f:
 			# Pickle the 'data' dictionary using the highest protocol available.
@@ -221,9 +269,10 @@ class Evaluate_ML(luigi.Task):
 
 	clf_name = luigi.Parameter()
 	wf_name = luigi.Parameter()
+	ext_val = luigi.Parameter(default='No')
 
 	def requires(self):
-		if WF_info[self.wf_name]['validation_type'] == 'external_validation':
+		if self.ext_val == 'Yes':
 			yield ExternalValidation(wf_name=self.wf_name,clf_name=self.clf_name)
 		else:
 			for i in range(1,WF_info[self.wf_name]['cv_repetitions']+1):
@@ -250,19 +299,24 @@ class Evaluate_ML(luigi.Task):
 
 	def output(self):
 		try:
-			os.makedirs(os.path.join(tmp_path,self.__class__.__name__))
+			os.makedirs(os.path.join(tmp_path,self.__class__.__name__,self.wf_name))
 		except:
 			pass
-		return {"pred_prob": luigi.LocalTarget(os.path.join(tmp_path,self.__class__.__name__,f"Unfolded_Pred_Prob_{self.wf_name}_{self.clf_name}.pickle")),
-				"true_label": luigi.LocalTarget(os.path.join(tmp_path,self.__class__.__name__,f"Unfolded_True_Label_{self.wf_name}_{self.clf_name}.pickle")),
-				"auc_results": luigi.LocalTarget(os.path.join(tmp_path,self.__class__.__name__,f"AUC_results_{self.wf_name}_{self.clf_name}.pickle"))}
+		if(self.ext_vale == 'Yes'):
+			prefix = 'EXT_'
+		else:
+			prefix = ''
+		return {"pred_prob": luigi.LocalTarget(os.path.join(tmp_path,self.__class__.__name__,self.wf_name,f"Unfolded_Pred_Prob_{prefix}{self.clf_name}.pickle")),
+				"true_label": luigi.LocalTarget(os.path.join(tmp_path,self.__class__.__name__,self.wf_name,f"Unfolded_True_Label_{prefix}{self.clf_name}.pickle")),
+				"auc_results": luigi.LocalTarget(os.path.join(tmp_path,self.__class__.__name__,self.wf_name,f"AUC_results_{prefix}{self.clf_name}.pickle"))}
 
 class EvaluateRiskScore(luigi.Task):
 	wf_name = luigi.Parameter()
 	score_name = luigi.Parameter()
+	ext_val = luigi.Parameter(default='No')
 
 	def requires(self):
-		if WF_info[self.wf_name]['validation_type'] == 'external_validation':
+		if self.ext_val == 'Yes':
 			yield ExternalValidationRS(wf_name=self.wf_name,score_name=self.score_name)
 		else:
 			for i in range(1,WF_info[self.wf_name]['cv_repetitions']+1):
@@ -288,16 +342,21 @@ class EvaluateRiskScore(luigi.Task):
 
 	def output(self):
 		try:
-			os.makedirs(os.path.join(tmp_path, self.__class__.__name__))
+			os.makedirs(os.path.join(tmp_path, self.__class__.__name__,self.wf_name))
 		except:
 			pass
-		return {"pred_prob": luigi.LocalTarget(os.path.join(tmp_path, self.__class__.__name__,f"Unfolded_Pred_Prob_{self.wf_name}_{self.score_name}.pickle")),
-				"true_label": luigi.LocalTarget(os.path.join(tmp_path, self.__class__.__name__,f"Unfolded_True_Label_{self.wf_name}_{self.score_name}.pickle")),
-				"auc_results": luigi.LocalTarget(os.path.join(tmp_path, self.__class__.__name__,f"AUC_results_{self.wf_name}_{self.score_name}.pickle"))}
+		if(self.ext_vale == 'Yes'):
+			prefix = 'EXT_'
+		else:
+			prefix = ''
+		return {"pred_prob": luigi.LocalTarget(os.path.join(tmp_path, self.__class__.__name__,self.wf_name,f"Unfolded_Pred_Prob_{prefix}{self.score_name}.pickle")),
+				"true_label": luigi.LocalTarget(os.path.join(tmp_path, self.__class__.__name__,self.wf_name,f"Unfolded_True_Label_{prefix}{self.score_name}.pickle")),
+				"auc_results": luigi.LocalTarget(os.path.join(tmp_path, self.__class__.__name__,self.wf_name,f"AUC_results_{prefix}{self.score_name}.pickle"))}
 
 class ConfidenceIntervalHanleyRS(luigi.Task):
 	wf_name = luigi.Parameter()
 	score_name = luigi.Parameter()
+	ext_val = luigi.Parameter(default = 'No')
 
 	def requires(self):
 		return FillnaDatabase()
@@ -318,10 +377,14 @@ class ConfidenceIntervalHanleyRS(luigi.Task):
 			f.write(f"Confidence Interval Hanley(95%): {ci95_low}-{ci95_high}\n")
 	def output(self):
 		try:
-			os.makedirs(os.path.join(tmp_path, self.__class__.__name__))
+			os.makedirs(os.path.join(tmp_path, self.__class__.__name__, self.wf_name))
 		except:
 			pass
-		return luigi.LocalTarget(os.path.join(tmp_path, self.__class__.__name__, f"CI_{self.wf_name}_{self.score_name}.txt"))
+		if(self.ext_vale == 'Yes'):
+			prefix = 'EXT_'
+		else:
+			prefix = ''
+		return luigi.LocalTarget(os.path.join(tmp_path, self.__class__.__name__, self.wf_name, f"CI_{prefix}{self.score_name}.txt"))
 
 
 class DescriptiveXLS(luigi.Task):
@@ -394,13 +457,14 @@ class AllModels_PairedTTest(luigi.Task):
 	wf_name = luigi.Parameter()
 	list_ML = luigi.ListParameter(default=list(ML_info.keys()))
 	list_RS = luigi.ListParameter(default=list(RS_info.keys()))
+	ext_val = luigi.Parameter(default = 'No')
 
 	def requires(self):
 		requirements={}
 		for clf_or_score1 in self.list_RS:
-			requirements[clf_or_score1] = EvaluateRiskScore(wf_name=self.wf_name, score_name = clf_or_score1)
+			requirements[clf_or_score1] = EvaluateRiskScore(wf_name=self.wf_name, score_name = clf_or_score1, ext_val=self.ext_val)
 		for clf_or_score2 in self.list_ML:
-			requirements[clf_or_score2] = Evaluate_ML(wf_name=self.wf_name, clf_name=clf_or_score2)
+			requirements[clf_or_score2] = Evaluate_ML(wf_name=self.wf_name, clf_name=clf_or_score2, ext_val=self.ext_val)
 		return requirements
 
 	def run(self):
@@ -435,13 +499,14 @@ class GraphsWF(luigi.Task):
 	list_RS = luigi.ListParameter(default=list(RS_info.keys()))
 	n_best_ML = luigi.IntParameter(default=1)
 	n_best_RS = luigi.IntParameter(default=2)
+	ext_val = luigi.Parameter(default='No')
 
 	def requires(self):
 		requirements = {}
 		for i in self.list_ML:
-			requirements[i] = Evaluate_ML(clf_name = i, wf_name = self.wf_name)
+			requirements[i] = Evaluate_ML(clf_name = i, wf_name = self.wf_name, ext_val=self.ext_val)
 		for i in self.list_RS:
-			requirements[i] = EvaluateRiskScore(score_name = i, wf_name = self.wf_name)
+			requirements[i] = EvaluateRiskScore(score_name = i, wf_name = self.wf_name, ext_val=self.ext_val)
 		return requirements
 
 	def run(self):
@@ -486,11 +551,15 @@ class GraphsWF(luigi.Task):
 			os.makedirs(os.path.join(report_path,self.wf_name))
 		except:
 			pass
-		if((len(self.list_RS) > 0) & (len(self.list_ML) > 0)):
-			return {"plot_all": luigi.LocalTarget(os.path.join(report_path,self.wf_name, f"AllModelsPlot_{self.wf_name}.png")),
-					"plot_best": luigi.LocalTarget(os.path.join(report_path,self.wf_name, f"BestModelsPlot_{self.wf_name}.png"))}
+		if(self.ext_vale == 'Yes'):
+			prefix = 'EXT_'
 		else:
-			return {"plot_all": luigi.LocalTarget(os.path.join(report_path,self.wf_name, f"AllModelsPlot_{self.wf_name}.png"))}
+			prefix = ''
+		if((len(self.list_RS) > 0) & (len(self.list_ML) > 0)):
+			return {"plot_all": luigi.LocalTarget(os.path.join(report_path,self.wf_name, f"AllModelsPlot_{prefix}{self.wf_name}.png")),
+					"plot_best": luigi.LocalTarget(os.path.join(report_path,self.wf_name, f"BestModelsPlot_{prefix}{self.wf_name}.png"))}
+		else:
+			return {"plot_all": luigi.LocalTarget(os.path.join(report_path,self.wf_name, f"AllModelsPlot_{prefix}{self.wf_name}.png"))}
 
 
 
@@ -732,6 +801,28 @@ class AllThresholds(luigi.Task):
 			pass
 		return luigi.LocalTarget(os.path.join(tmp_path,self.__class__.__name__, f"Thresholds_{self.wf_name}_{self.clf_or_score}.txt"))
 
+class ExternalValidation
+
+class OnlyGraphs(luigi.Task):
+
+	list_ML = luigi.ListParameter(default=list(ML_info.keys()))
+	list_RS = luigi.ListParameter(default=list(RS_info.keys()))
+	list_WF = luigi.ListParameter(default=list(WF_info.keys()))
+
+	def requires(self):
+
+		for it_wf_name in self.list_WF:
+			yield GraphsWF(wf_name = it_wf_name, list_ML=self.list_ML, list_RS=self.list_RS)
+
+
+	def run(self):
+		with open(self.output().path,'w') as f:
+			f.write("prueba\n")
+
+	def output(self):
+		TIMESTRING=dt.datetime.now().strftime("%y%m%d-%H%M%S")
+		return luigi.LocalTarget(os.path.join(log_path, f"OnlyGraphs_Log-{TIMESTRING}.txt"))
+
 class AllTasks(luigi.Task):
 
 	list_ML = luigi.ListParameter(default=list(ML_info.keys()))
@@ -752,6 +843,11 @@ class AllTasks(luigi.Task):
 			yield AllModels_PairedTTest(wf_name = it_wf_name, list_ML=self.list_ML, list_RS=self.list_RS)
 			for it_clf_name in self.list_ML:
 				yield FinalModelAndHyperparameterResults(wf_name = it_wf_name, clf_name = it_clf_name)
+			if(WF_info['external_validation'] == 'Yes'):
+				yield GraphsWF(wf_name = it_wf_name, list_ML=self.list_ML, list_RS=self.list_RS, ext_val = 'Yes')
+				yield BestMLModelReport(wf_name = it_wf_name, list_ML=self.list_ML, ext_val = 'Yes')
+				yield BestRSReport(wf_name = it_wf_name, list_RS=self.list_RS, ext_val = 'Yes')
+				yield AllModels_PairedTTest(wf_name = it_wf_name, list_ML=self.list_ML, list_RS=self.list_RS,ext_val = 'Yes')
 
 	def run(self):
 		with open(self.output().path,'w') as f:

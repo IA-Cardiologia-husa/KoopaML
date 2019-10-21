@@ -347,17 +347,6 @@ def group_files_analyze(task_requires, clf_name):
 
 	return (unfolded_pred_prob,unfolded_true_label, results_dict)
 
-def external_validation_analyze():
-
-
-	results_dict = {"auc": auc,
-					"avg_auc_stderr": std_error,
-					"95ci_low": averaging_auc - c*std_error,
-					"95ci_high": averaging_auc+c*std_error}
-
-	return (unfolded_pred_prob,unfolded_true_label, results_dict)
-
-
 def paired_ttest(req_name1, req_name2, xlsname, tmp_folder):
 
 	n_reps=0
