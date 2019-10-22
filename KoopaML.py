@@ -132,6 +132,7 @@ class ExternalValidation(luigi.Task):
 	def requires(self):
 		return {'external_data': FillnaExternalDatabase(),
 				'clf': FinalModelAndHyperparameterResults(wf_name = self.wf_name, clf_name = self.clf_name)
+				}
 
 	def run(self):
 		df_input = pd.read_pickle(self.input()["external_data"]["pickle"].path)
@@ -217,10 +218,10 @@ class CalculateKFold(luigi.Task):
 
 	def output(self):
 		try:
-			os.makedirs(os.path.join(tmp_path,self.__class__.__name__))
+			os.makedirs(os.path.join(tmp_path,self.__class__.__name__,self.wf_name,self.clf_name))
 		except:
 			pass
-		return luigi.LocalTarget(os.path.join(tmp_path,self.__class__.__name__,f"TrueLabel_PredProb_{self.wf_name}_{self.clf_name}_{self.seed}.dict"))
+		return luigi.LocalTarget(os.path.join(tmp_path,self.__class__.__name__,self.wf_name,self.clf_name,f"TrueLabel_PredProb_{self.seed}.dict"))
 
 class RiskScore_KFold(luigi.Task):
 
@@ -302,7 +303,7 @@ class Evaluate_ML(luigi.Task):
 			os.makedirs(os.path.join(tmp_path,self.__class__.__name__,self.wf_name))
 		except:
 			pass
-		if(self.ext_vale == 'Yes'):
+		if(self.ext_val == 'Yes'):
 			prefix = 'EXT_'
 		else:
 			prefix = ''
@@ -345,7 +346,7 @@ class EvaluateRiskScore(luigi.Task):
 			os.makedirs(os.path.join(tmp_path, self.__class__.__name__,self.wf_name))
 		except:
 			pass
-		if(self.ext_vale == 'Yes'):
+		if(self.ext_val == 'Yes'):
 			prefix = 'EXT_'
 		else:
 			prefix = ''
@@ -380,7 +381,7 @@ class ConfidenceIntervalHanleyRS(luigi.Task):
 			os.makedirs(os.path.join(tmp_path, self.__class__.__name__, self.wf_name))
 		except:
 			pass
-		if(self.ext_vale == 'Yes'):
+		if(self.ext_val == 'Yes'):
 			prefix = 'EXT_'
 		else:
 			prefix = ''
@@ -551,7 +552,7 @@ class GraphsWF(luigi.Task):
 			os.makedirs(os.path.join(report_path,self.wf_name))
 		except:
 			pass
-		if(self.ext_vale == 'Yes'):
+		if(self.ext_val == 'Yes'):
 			prefix = 'EXT_'
 		else:
 			prefix = ''
@@ -801,8 +802,6 @@ class AllThresholds(luigi.Task):
 			pass
 		return luigi.LocalTarget(os.path.join(tmp_path,self.__class__.__name__, f"Thresholds_{self.wf_name}_{self.clf_or_score}.txt"))
 
-class ExternalValidation
-
 class OnlyGraphs(luigi.Task):
 
 	list_ML = luigi.ListParameter(default=list(ML_info.keys()))
@@ -838,12 +837,14 @@ class AllTasks(luigi.Task):
 		for it_wf_name in self.list_WF:
 			yield DescriptiveXLS(wf_name = it_wf_name)
 			yield GraphsWF(wf_name = it_wf_name, list_ML=self.list_ML, list_RS=self.list_RS)
-			yield BestMLModelReport(wf_name = it_wf_name, list_ML=self.list_ML)
-			yield BestRSReport(wf_name = it_wf_name, list_RS=self.list_RS)
+			if(len(list_ML) > 0):
+				yield BestMLModelReport(wf_name = it_wf_name, list_ML=self.list_ML)
+			if(len(list_RS) > 0):
+				yield BestRSReport(wf_name = it_wf_name, list_RS=self.list_RS)
 			yield AllModels_PairedTTest(wf_name = it_wf_name, list_ML=self.list_ML, list_RS=self.list_RS)
 			for it_clf_name in self.list_ML:
 				yield FinalModelAndHyperparameterResults(wf_name = it_wf_name, clf_name = it_clf_name)
-			if(WF_info['external_validation'] == 'Yes'):
+			if(WF_info[it_wf_name]['external_validation'] == 'Yes'):
 				yield GraphsWF(wf_name = it_wf_name, list_ML=self.list_ML, list_RS=self.list_RS, ext_val = 'Yes')
 				yield BestMLModelReport(wf_name = it_wf_name, list_ML=self.list_ML, ext_val = 'Yes')
 				yield BestRSReport(wf_name = it_wf_name, list_RS=self.list_RS, ext_val = 'Yes')
