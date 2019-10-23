@@ -20,7 +20,8 @@ def create_descriptive_xls(data, wf_name, label_name):
 
 	if (len(dict_var.keys())==0):
 		for i in data.columns:
-			dict_var[i]=i
+			if(data[i].dtype in ['float64','float32','int64','int32','bool'])
+				dict_var[i]=i
 
 	for i in data.columns:
 		if i in dict_var.keys():
