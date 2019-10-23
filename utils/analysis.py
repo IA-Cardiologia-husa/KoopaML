@@ -289,6 +289,9 @@ def plot_all_aucs(task_requires, fig_path,title):
 		else:
 			score_name = "ERROR: Unknown score or classifier"
 
+		pred_prob = pred_prob[~np.isnan(pred_prob)]
+		true_label = true_label[~np.isnan(true_label)]
+
 		fpr, tpr, thresholds = sk_m.roc_curve(true_label,pred_prob)
 		plt.plot(fpr, tpr, lw=2, alpha=1, color=cmap(color_index) , label = f'{score_name}: AUC ={results_dict["avg_auc"]:1.2f} ({results_dict["95ci_low"]:1.2f}-{results_dict["95ci_high"]:1.2f})' )
 		color_index+=1

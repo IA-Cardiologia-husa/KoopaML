@@ -139,7 +139,8 @@ class ExternalValidation(luigi.Task):
 		df_filtered = WF_info[self.wf_name]["filter_function"](df_input)
 		features = WF_info[self.wf_name]["feature_list"]
 		label = WF_info[self.wf_name]["label_name"]
-		clf = pd.read_pickle(self.input()["clf"].path)
+		with open(self.input()["clf"].path, 'rb') as f:
+			clf = pickle.load(f)
 
 		tl_pp_dict = external_validation(df_filtered, label, features, clf)
 
