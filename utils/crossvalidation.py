@@ -28,6 +28,65 @@ def external_validation(external_data, label, features, clf):
 
 	return tl_pp_dict
 
+def predict_filter_kfold_ML(data, label, features, filter_function, score_name, sign, seed, cvfolds):
+
+	kf = sk_ms.KFold(cvfolds, random_state=seed, shuffle=True)
+
+	predicted_probability = []
+	true_label = []
+
+	for train_index, test_index in kf.split(data):
+		data_train, data_test = data.iloc[train_index], data.iloc[test_index]
+
+		X_train = filter_function(data_train).loc[:,features]
+		Y_train = filter_function(data_train).loc[:,[label]]
+
+		X_train = X_train.loc[~Y_train[label].isnull()]
+		Y_train = Y_train.loc[~Y_train[label].isnull()]
+
+		X_test = data_test.loc[:,features]
+		Y_test = data_test.loc[:,[label]]
+
+		try:
+			Y_prob = clf.fit(X_train, Y_train).predict_proba(X_test)
+			predicted_probability.append(Y_prob[:,1])
+		except:
+			Y_prob = clf.fit(X_train, Y_train).decision_function(X_test)
+			predicted_probability.append(Y_prob)
+		true_label.append(list(Y_test.values.flat))
+
+	tl_pp_dict={"true_label":true_label, "pred_prob":predicted_probability}
+
+	return tl_pp_dict
+
+def predict_filter_kfold_RS(data, label, features, filter_function, sign, score_name, seed, cvfolds):
+
+	kf = sk_ms.KFold(cvfolds, random_state=seed, shuffle=True)
+
+	predicted_probability = []
+	true_label = []
+
+	for train_index, test_index in kf.split(data):
+		data_train, data_test = data.iloc[train_index], data.iloc[test_index]
+
+		X_train = filter_function(data_train).loc[:,features]
+		Y_train = filter_function(data_train).loc[:,[label]]
+
+		X_train = X_train.loc[~Y_train[label].isnull()]
+		Y_train = Y_train.loc[~Y_train[label].isnull()]
+
+		X_test = data_test
+		Y_test = data_test.loc[:,[label]]
+
+		Y_prob = sign*X_test.loc[:,score_name]
+
+		predicted_probability.append(Y_prob)
+		true_label.append(list(Y_test.values.flat))
+
+	tl_pp_dict={"true_label":true_label, "pred_prob":predicted_probability}
+
+	return tl_pp_dict
+
 def predict_kfold_ML(data, label, features, cv_type, clf, seed, cvfolds):
 
 

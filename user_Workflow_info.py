@@ -10,7 +10,7 @@
 # group_label:		groups for cross-validation. Subjects from the same groups
 #					will appear in the same folds
 # validation_type: 	"kfold", "groupkfold", "stratifiedkfold", "stratifiedgroupkfold",
-#					"external_validation"
+#					"unfilterdkfold" (for doing the kfold first and then filtering the folds)
 # cv_folds:			For kfolds, the number of folds
 # cv_repetitions:	For kfolds, the number of repetitions
 # external_validation: 'Yes' or 'No', in case of 'Yes', you have to fill user_external_data_utils.py

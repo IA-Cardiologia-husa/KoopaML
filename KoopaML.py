@@ -199,7 +199,8 @@ class CalculateKFold(luigi.Task):
 		with open(os.path.join(log_path,self.__class__.__name__,f"Log_{self.wf_name}_{self.clf_name}_{self.seed}.txt"),'w') as f:
 			with contextlib.redirect_stdout(f):
 				df_input = pd.read_pickle(self.input()["pickle"].path)
-				df_filtered = WF_info[self.wf_name]["filter_function"](df_input)
+				filter_function = WF_info[self.wf_name]["filter_function"]
+				df_filtered = filter_function(df_input)
 				features = WF_info[self.wf_name]["feature_list"]
 				label = WF_info[self.wf_name]["label_name"]
 				group_label = WF_info[self.wf_name]["group_label"]
@@ -207,10 +208,14 @@ class CalculateKFold(luigi.Task):
 				folds = WF_info[self.wf_name]["cv_folds"]
 				clf = ML_info[self.clf_name]["clf"]
 
-				if group_label is None:
+				if ((cv_type == 'kfold') or (cv_type=='stratifiedkfold')):
 					tl_pp_dict = predict_kfold_ML(df_filtered, label, features, cv_type, clf, self.seed, folds)
+				elif ((cv_type == 'groupkfold') or (cv_type=='stratifiedgroupkfold')):
+					tl_pp_dict = predict_groupkfold_ML(df_filtered, label, features, group_label, cv_type, clf, self.seed, folds)
+				elif (cv_type == 'unfilteredkfold'):
+					tl_pp_dict = predict_filter_kfold_ML(df_input, label, features, filter_function, clf, self.seed, folds)
 				else:
-					 tl_pp_dict = predict_groupkfold_ML(df_filtered, label, features, group_label, cv_type, clf, self.seed, folds)
+					raise('cv_type not recognized')
 
 		with open(self.output().path, 'wb') as f:
 			# Pickle the 'data' dictionary using the highest protocol available.
@@ -240,7 +245,8 @@ class RiskScore_KFold(luigi.Task):
 		with open(os.path.join(log_path,self.__class__.__name__,f"Log_{self.wf_name}_{self.score_name}_{self.seed}.txt"),'w') as f:
 			with contextlib.redirect_stdout(f):
 				df_input = pd.read_pickle(self.input()["pickle"].path)
-				df_filtered = WF_info[self.wf_name]["filter_function"](df_input)
+				filter_function = WF_info[self.wf_name]["filter_function"]
+				df_filtered = filter_function(df_input)
 				label = WF_info[self.wf_name]["label_name"]
 				features = WF_info[self.wf_name]["feature_list"]
 				group_label = WF_info[self.wf_name]["group_label"]
@@ -249,10 +255,15 @@ class RiskScore_KFold(luigi.Task):
 				sign = RS_info[self.score_name]["sign"]
 				RS_name = RS_info[self.score_name]["label_name"]
 
-				if group_label is None:
+				if ((cv_type == 'kfold') or (cv_type=='stratifiedkfold')):
 					tl_pp_dict = predict_kfold_RS(df_filtered, label, features, sign, RS_name, self.seed, folds)
-				else:
+				elif ((cv_type == 'groupkfold') or (cv_type=='stratifiedgroupkfold')):
 					tl_pp_dict = predict_groupkfold_RS(df_filtered, label, features, group_label, cv_type, sign, RS_name, self.seed, folds)
+				elif (cv_type == 'unfilteredkfold'):
+					tl_pp_dict = predict_filter_kfold_RS(df_input, label, features, filter_function, sign, RS_name, self.seed, folds)
+				else:
+					raise('cv_type not recognized')
+
 
 		with open(self.output().path, 'wb') as f:
 			# Pickle the 'data' dictionary using the highest protocol available.

@@ -316,14 +316,19 @@ def group_files_analyze(task_requires, clf_name):
 
 		for true_label, pred_prob in zip(rp_dict['true_label'], rp_dict['pred_prob']):
 			n_repfolds+=1
-			score+=sk_m.roc_auc_score(true_label,pred_prob)
-			score2+=sk_m.roc_auc_score(true_label,pred_prob)**2
+			true_label = np.array(true_label)
+			pred_prob = np.array(pred_prob)
+			score+=sk_m.roc_auc_score(true_label[~np.isnan(true_label)].astype(bool),pred_prob[~np.isnan(true_label)])
+			score2+=sk_m.roc_auc_score(true_label[~np.isnan(true_label)].astype(bool),pred_prob[~np.isnan(true_label)])**2
 			unfolded_true_label+=list(true_label)
 			unfolded_pred_prob+=list(pred_prob)
 
 	n_folds=n_repfolds/n_reps
 
-	pooling_auc = sk_m.roc_auc_score(unfolded_true_label,unfolded_pred_prob)
+	unfolded_true_label=np.array(unfolded_true_label)
+	unfolded_pred_prob = np.array(unfolded_pred_prob)
+
+	pooling_auc = sk_m.roc_auc_score(unfolded_true_label[~np.isnan(unfolded_true_label)].astype(bool),unfolded_pred_prob[~np.isnan(unfolded_true_label)])
 	averaging_auc = score/n_repfolds
 	averaging_sample_variance = (score2-score**2/n_repfolds)/(n_repfolds-1)
 	critical_pvalue=0.05
