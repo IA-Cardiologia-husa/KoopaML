@@ -12,7 +12,7 @@ def external_validation_RS(external_data, label, score_label, sign):
 	S = sign*external_data.loc[:,[score_label]]
 
 	#Saved as a list of lists because of compatibility with predict_kfold
-	tl_pp_dict={"true_label":[list(Y.values)], "pred_prob":[list(S.values)]}
+	tl_pp_dict={"true_label":[list(Y.values.flat)], "pred_prob":[list(S.values.flat)]}
 
 	return tl_pp_dict
 
@@ -21,14 +21,14 @@ def external_validation(external_data, label, features, clf):
 	Y = external_data.loc[:,[label]]
 
 
-	Y_prob = clfpredict_proba(external_X)[:,1]
+	Y_prob = clf.predict_proba(X)[:,1]
 
 	#Saved as a list of lists because of compatibility with predict_kfold
-	tl_pp_dict={"true_label":[list(Y.values)], "pred_prob":[list(Y_prob)]}
+	tl_pp_dict={"true_label":[list(Y.values.flat)], "pred_prob":[list(Y_prob)]}
 
 	return tl_pp_dict
 
-def predict_filter_kfold_ML(data, label, features, filter_function, score_name, sign, seed, cvfolds):
+def predict_filter_kfold_ML(data, label, features, filter_function, clf, seed, cvfolds):
 
 	kf = sk_ms.KFold(cvfolds, random_state=seed, shuffle=True)
 

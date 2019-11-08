@@ -20,7 +20,7 @@ def create_descriptive_xls(data, wf_name, label_name):
 
 	if (len(dict_var.keys())==0):
 		for i in data.columns:
-			if(data[i].dtype in ['float64','float32','int64','int32','bool'])
+			if(data[i].dtype in ['float64','float32','int64','int32','bool']):
 				dict_var[i]=i
 
 	for i in data.columns:
@@ -289,7 +289,7 @@ def plot_all_aucs(task_requires, fig_path,title):
 		else:
 			score_name = "ERROR: Unknown score or classifier"
 
-		pred_prob = pred_prob[~np.isnan(pred_prob)]
+		pred_prob = pred_prob[~np.isnan(true_label)]
 		true_label = true_label[~np.isnan(true_label)]
 
 		fpr, tpr, thresholds = sk_m.roc_curve(true_label,pred_prob)
