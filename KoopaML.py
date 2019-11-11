@@ -437,12 +437,17 @@ class FinalModelAndHyperparameterResults(luigi.Task):
 
 		self.clf=ML_info[self.clf_name]["clf"]
 
-		X = df_filtered.loc[:,features]
-		Y = df_filtered.loc[:,[label]]
+		X_full = df_filtered.loc[:,features]
+		Y_full = df_filtered.loc[:,[label]]
+
+		X = X_full.loc[~Y_full[label].isnull()]
+		Y = Y_full.loc[~Y_full[label].isnull()]
+
 		if(group_label is None):
 			self.clf.fit(X,Y)
 		else:
-			G = df_filtered.loc[:,[group_label]]
+			G_full = df_filtered.loc[:,[group_label]]
+			G = G_full.loc[~Y_full[label].isnull()]
 			try:
 				self.clf.fit(X,Y,groups=G)
 			except:
