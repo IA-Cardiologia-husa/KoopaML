@@ -371,8 +371,17 @@ def paired_ttest(req_name1, req_name2, xlsname, tmp_folder):
 
 				for fold in range(len(rp_dict1['pred_prob'])):
 					n_repfolds+=1
-					auc1 = sk_m.roc_auc_score(rp_dict1['true_label'][fold],rp_dict1['pred_prob'][fold])
-					auc2 = sk_m.roc_auc_score(rp_dict2['true_label'][fold],rp_dict2['pred_prob'][fold])
+					true_label1 = rp_dict1['true_label'][fold]
+					pred_prob1 = rp_dict1['pred_prob'][fold])
+					tl1 = true_label1[~np.isnan(true_label1)]
+					pp1 = pred_prob1[~np.isnan(true_label1)]
+					auc1 = sk_m.roc_auc_score(tl1,pp1)
+
+					#True labels for the same workflow should be the same and there is no need to load the ones from rp_dict2
+					pred_prob2 = rp_dict2['pred_prob'][fold])
+					pp2 = pred_prob2[~np.isnan(true_label1)]
+					auc2 = sk_m.roc_auc_score(tl1,pp2)
+
 					score+= auc1-auc2
 					score2+=(auc1-auc2)**2
 

@@ -854,9 +854,9 @@ class AllTasks(luigi.Task):
 		for it_wf_name in self.list_WF:
 			yield DescriptiveXLS(wf_name = it_wf_name)
 			yield GraphsWF(wf_name = it_wf_name, list_ML=self.list_ML, list_RS=self.list_RS)
-			if(len(list_ML) > 0):
+			if(len(self.list_ML) > 0):
 				yield BestMLModelReport(wf_name = it_wf_name, list_ML=self.list_ML)
-			if(len(list_RS) > 0):
+			if(len(self.list_RS) > 0):
 				yield BestRSReport(wf_name = it_wf_name, list_RS=self.list_RS)
 			yield AllModels_PairedTTest(wf_name = it_wf_name, list_ML=self.list_ML, list_RS=self.list_RS)
 			for it_clf_name in self.list_ML:
