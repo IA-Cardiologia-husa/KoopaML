@@ -662,6 +662,7 @@ class ThresholdPoints(luigi.Task):
 class BestMLModelReport(luigi.Task):
 	wf_name = luigi.Parameter()
 	list_ML = luigi.ListParameter(default=list(ML_info.keys()))
+	all_ML_importances = luigi.BoolParameter(default=True)
 
 	def requires(self):
 		requirements = {}
@@ -669,6 +670,8 @@ class BestMLModelReport(luigi.Task):
 		for i in self.list_ML:
 			requirements[i] = Evaluate_ML(clf_name = i, wf_name = self.wf_name)
 			requirements[i+'_threshold'] = ThresholdPoints(clf_or_score = i, wf_name = self.wf_name, list_ML = self.list_ML)
+			if all_ML_importances:
+				requirements[i+'_importances'] = MDAFeatureImportances(clf_name = i, wf_name = self.wf_name)
 		return requirements
 
 	def run(self):
@@ -697,16 +700,16 @@ class BestMLModelReport(luigi.Task):
 				for line in f2.readlines():
 					f.write(line)
 
-			df_input = pd.read_pickle(self.input()["fillna_DB"]["pickle"].path)
-			df_filtered = WF_info[self.wf_name]["filter_function"](df_input)
-			label = WF_info[self.wf_name]["label_name"]
-			features = WF_info[self.wf_name]["feature_list"]
-
-			prerequisite = MDAFeatureImportances(clf_name = best_ml, wf_name = self.wf_name)
-			luigi.build([prerequisite], local_scheduler = False)
-			with open(prerequisite.output().path, 'r') as f3:
-				for line in f3.readlines():
-					f.write(line)
+			if all_ML_importances:
+				with open(self.input()[best_ml+'_importances'].path, 'r') as f3:
+					for line in f3.readlines():
+						f.write(line)
+			else:
+				prerequisite = MDAFeatureImportances(clf_name = best_ml, wf_name = self.wf_name)
+				luigi.build([prerequisite], local_scheduler = False)
+				with open(prerequisite.output().path, 'r') as f3:
+					for line in f3.readlines():
+						f.write(line)
 
 	def output(self):
 		try:
