@@ -670,7 +670,7 @@ class BestMLModelReport(luigi.Task):
 		for i in self.list_ML:
 			requirements[i] = Evaluate_ML(clf_name = i, wf_name = self.wf_name)
 			requirements[i+'_threshold'] = ThresholdPoints(clf_or_score = i, wf_name = self.wf_name, list_ML = self.list_ML)
-			if all_ML_importances:
+			if self.all_ML_importances:
 				requirements[i+'_importances'] = MDAFeatureImportances(clf_name = i, wf_name = self.wf_name)
 		return requirements
 
@@ -700,7 +700,7 @@ class BestMLModelReport(luigi.Task):
 				for line in f2.readlines():
 					f.write(line)
 
-			if all_ML_importances:
+			if self.all_ML_importances:
 				with open(self.input()[best_ml+'_importances'].path, 'r') as f3:
 					for line in f3.readlines():
 						f.write(line)
