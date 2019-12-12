@@ -3,6 +3,7 @@ import numpy as np
 import pandas as pd
 import datetime as dt
 import pickle
+import sklearn.calibration as sk_cal
 
 import luigi
 import contextlib
@@ -455,13 +456,22 @@ class FinalModelAndHyperparameterResults(luigi.Task):
 
 
 		try:
-			self.final_clf = self.clf.best_estimator_
+			self.calibrated_clf = sk_cal.CalibratedClassifierCV(self.clf.best_estimator_, method='sigmoid', cv=10)
+			try:
+				self.calibrated_clf.fit(X,Y,groups=G)
+			except:
+				self.calibrated_clf.fit(X,Y)
 			with open(self.output().path,'wb') as f:
-				pickle.dump(self.final_clf, f, pickle.HIGHEST_PROTOCOL)
+				pickle.dump(self.calibrated_clf, f, pickle.HIGHEST_PROTOCOL)
 			pd.DataFrame(self.clf.cv_results_).to_excel(os.path.join(model_path,self.wf_name,f"HyperparameterResults_{self.wf_name}_{self.clf_name}.xlsx"))
 		except:
+			self.calibrated_clf = sk_cal.CalibratedClassifierCV(self.clf, method='sigmoid', cv=10)
+			try:
+				self.calibrated_clf.fit(X,Y,groups=G)
+			except:
+				self.calibrated_clf.fit(X,Y)
 			with open(self.output().path,'wb') as f:
-				pickle.dump(self.clf, f, pickle.HIGHEST_PROTOCOL)
+				pickle.dump(self.calibrated_clf, f, pickle.HIGHEST_PROTOCOL)
 
 	def output(self):
 		try:
@@ -670,6 +680,7 @@ class BestMLModelReport(luigi.Task):
 		for i in self.list_ML:
 			requirements[i] = Evaluate_ML(clf_name = i, wf_name = self.wf_name)
 			requirements[i+'_threshold'] = ThresholdPoints(clf_or_score = i, wf_name = self.wf_name, list_ML = self.list_ML)
+			requirements[i+'_allthresholds'] = AllThresholds(clf_or_score = i, wf_name = self.wf_name, list_ML = self.list_ML)
 			if self.all_ML_importances:
 				requirements[i+'_importances'] = MDAFeatureImportances(clf_name = i, wf_name = self.wf_name)
 		return requirements
@@ -753,7 +764,7 @@ class BestRSReport(luigi.Task):
 				for line in f2.readlines():
 					f.write(line)
 			f.write("\n")
-			with open(self.input()[best_rs+'_threshold'].path, 'r') as f3:
+			with open(self.input()[best_rs+'_threshold']['txt'].path, 'r') as f3:
 				for line in f3.readlines():
 					f.write(line)
 	def output(self):
@@ -809,18 +820,24 @@ class AllThresholds(luigi.Task):
 
 		list_thresholds = all_thresholds(pred_prob, true_label)
 
-		with open(self.output().path,'w') as f:
+		with open(self.output()['txt'].path,'w') as f:
+			rows = []
 			for i in list_thresholds:
 				(threshold, tprate, fprate, tnrate, fnrate, sens, spec, prec, nprv) = i
 				f.write(f'Threshold: {threshold}\n')
 				f.write(f'TP:{tprate*100:.1f} FP:{fprate*100:.1f} TN:{tnrate*100:.1f} FN:{fnrate*100:.1f}\n')
 				f.write(f'Sensitivity:{sens*100:.1f} Specifity:{spec*100:.1f} Precision:{prec*100:.1f} NPRv:{nprv*100:.1f}\n')
+				rows.append([threshold, tprate, fprate, tnrate, fnrate, sens, spec, prec, nprv])
+		df_thr = pd.DataFrame(rows, columns=['Threshold','TP','FP','TN','FN', 'sensitivity','specificity','precision','nprv'])
+		with open(self.output()['df'].path,'w') as f:
+			df_thr.to_csv(f)
 	def output(self):
 		try:
 			os.makedirs(os.path.join(tmp_path,self.__class__.__name__))
 		except:
 			pass
-		return luigi.LocalTarget(os.path.join(tmp_path,self.__class__.__name__, f"Thresholds_{self.wf_name}_{self.clf_or_score}.txt"))
+		return {'txt': luigi.LocalTarget(os.path.join(tmp_path,self.__class__.__name__, f"Thresholds_{self.wf_name}_{self.clf_or_score}.txt")),
+				'df': luigi.LocalTarget(os.path.join(tmp_path,self.__class__.__name__, f"Thresholds_{self.wf_name}_{self.clf_or_score}.csv"))}
 
 class OnlyGraphs(luigi.Task):
 
@@ -841,6 +858,101 @@ class OnlyGraphs(luigi.Task):
 	def output(self):
 		TIMESTRING=dt.datetime.now().strftime("%y%m%d-%H%M%S")
 		return luigi.LocalTarget(os.path.join(log_path, f"OnlyGraphs_Log-{TIMESTRING}.txt"))
+
+# class FeatureScoringFolds(luigi.Task):
+# 	seed = luigi.IntParameter()
+# 	cvfolds = luigi.IntParameter()
+# 	wf_name = luigi.Parameter()
+# 	fs_name = luigi.Parameter()
+#
+# 	def requires(self):
+# 		return FillnaDatabase()
+#
+# 	def run(self):
+#
+# 		df_input = pd.read_pickle(self.input()["pickle"].path)
+# 		filter_function = WF_info[self.wf_name]["filter_function"]
+# 		df_filtered = filter_function(df_input)
+# 		features = WF_info[self.wf_name]["feature_list"]
+# 		label = WF_info[self.wf_name]["label_name"]
+# 		group_label = WF_info[self.wf_name]["group_label"]
+# 		cv_type = WF_info[self.wf_name]["validation_type"]
+# 		fs_function = FS_info[self.fs_name]["scorer_function"]
+#
+# 		X = df_filtered.loc[:, :]
+# 		Y = df_filtered.loc[:,[label]]
+#
+# 		.astype(bool)
+#
+# 		if (cv_type == 'kfold'):
+# 			kf = sk_ms.KFold(cvfolds, random_state=seed, shuffle=True)
+# 		elif(cv_type == 'stratifiedkfold'):
+# 			kf = sk_ms.StratifiedKFold(cvfolds, random_state=seed, shuffle=True)
+# 		elif(cv_type == 'groupkfold'):
+# 			kf = GroupKFold(cvfolds)
+# 		elif(cv_type == 'stratifiedgroupkfold'):
+# 			kf = StratifiedGroupKFold(cvfolds, random_state=seed, shuffle=True)
+# 		elif (cv_type == 'unfilteredkfold'):
+# 			kf = sk_ms.KFold(cvfolds, random_state=seed, shuffle=True)
+# 		else:
+# 			raise('cv_type not recognized')
+#
+# 		if ((cv_type == 'kfold') or (cv_type == 'stratifiedkfold') or (cv_type == 'unfilteredkfold')):
+# 			fold = 0
+# 			for train_index, test_index in kf.split(X,Y):
+# 				X_train, X_test = X.iloc[train_index], X.iloc[test_index]
+# 				Y_train, Y_test = Y.iloc[train_index], Y.iloc[test_index]
+#
+# 				X_train = X_train[~np.isnan(Y_train)]
+# 				Y_train = Y_train[~np.isnan(Y_train)].astype(bool)
+#
+# 				feature_scores = fs_function(X_train,Y_train)
+#
+# 				scores_dict = dict(zip(X_train.columns, feature_scores))
+# 				with open(self.output()[fold]["pickle"].path, 'wb') as f:
+# 					# Pickle the 'data' dictionary using the highest protocol available.
+# 					pickle.dump(scores_dict, f, pickle.HIGHEST_PROTOCOL)
+#
+# 				with open(self.output()[fold]["pickle"].path, 'w') as f:
+# 					# Pickle the 'data' dictionary using the highest protocol available.
+# 					for (feature, score) in zip(X_train.columns, feature_scores):
+# 						f.write(f"{feature}, {score}\n")
+# 				fold+=1
+#
+# 		if ((cv_type == 'groupkfold') or (cv_type == 'stratifiedgroupkfold')):
+# 			G = df_filtered.loc[:,[group_label]]
+# 			fold = 1
+# 			for train_index, test_index in kf.split(X,Y,G):
+# 				X_train, X_test = X.iloc[train_index], X.iloc[test_index]
+# 				Y_train, Y_test = Y.iloc[train_index], Y.iloc[test_index]
+#
+# 				X_train = X_train[~np.isnan(Y_train)]
+# 				Y_train = Y_train[~np.isnan(Y_train)].astype(bool)
+#
+# 				feature_scores = fs_function(X_train,Y_train)
+#
+# 				scores_dict = dict(zip(X_train.columns, feature_scores))
+# 				with open(self.output()[fold]["pickle"].path, 'wb') as f:
+# 					# Pickle the 'data' dictionary using the highest protocol available.
+# 					pickle.dump(scores_dict, f, pickle.HIGHEST_PROTOCOL)
+#
+# 				with open(self.output()[fold]["pickle"].path, 'w') as f:
+# 					# Pickle the 'data' dictionary using the highest protocol available.
+# 					for (feature, score) in zip(X_train.columns, feature_scores):
+# 						f.write(f"{feature}, {score}\n")
+# 				fold+=1
+#
+#
+# 		pass
+# 	def output(self):
+# 		try:
+# 			os.makedirs(os.path.join(tmp_path,self.__class__.__name__,self.wf_name))
+# 		except:
+# 			pass
+# 		for i in range(1,cvfolds+1):
+# 			yield {"pickle": luigi.LocalTarget(os.path.join(tmp_path,self.__class__.__name__,self.wf_name, f"FeatureScores_{self.FS_name}_r{self.seed}_f{i}.pickle")),
+# 					"txt": luigi.LocalTarget(os.path.join(tmp_path,self.__class__.__name__,self.wf_name, f"FeatureScores_{self.FS_name}_r{self.seed}_f{i}.txt"))}
+
 
 class AllTasks(luigi.Task):
 

@@ -2,6 +2,7 @@ import numpy as np
 import pandas as pd
 import sklearn.model_selection as sk_ms
 import sklearn.utils as sk_u
+import sklearn.calibration as sk_cal
 import time
 
 from .stratifiedgroupkfold import StratifiedGroupKFold
@@ -47,11 +48,20 @@ def predict_filter_kfold_ML(data, label, features, filter_function, clf, seed, c
 		X_test = data_test.loc[:,features]
 		Y_test = data_test.loc[:,[label]]
 
+		clf.fit(X_train, Y_train)
+
+		if hasattr(clf, 'best_estimator_'):
+			calibrated_clf = sk_cal.CalibratedClassifierCV(clf.best_estimator_, method='isotonic', cv=10)
+		else:
+			calibrated_clf = sk_cal.CalibratedClassifierCV(clf, method='isotonic', cv=10)
+
+		calibrated_clf.fit(X_train, Y_train)
+
 		try:
-			Y_prob = clf.fit(X_train, Y_train).predict_proba(X_test)
+			Y_prob = calibrated_clf.predict_proba(X_test)
 			predicted_probability.append(Y_prob[:,1])
 		except:
-			Y_prob = clf.fit(X_train, Y_train).decision_function(X_test)
+			Y_prob = calibrated_clf.decision_function(X_test)
 			predicted_probability.append(Y_prob)
 		true_label.append(list(Y_test.values.flat))
 
@@ -106,11 +116,21 @@ def predict_kfold_ML(data, label, features, cv_type, clf, seed, cvfolds):
 	for train_index, test_index in skf.split(X,Y):
 		X_train, X_test = X.iloc[train_index], X.iloc[test_index]
 		Y_train, Y_test = Y.iloc[train_index], Y.iloc[test_index]
+
+		clf.fit(X_train, Y_train)
+
+		if hasattr(clf, 'best_estimator_'):
+			calibrated_clf = sk_cal.CalibratedClassifierCV(clf.best_estimator_, method='isotonic', cv=10)
+		else:
+			calibrated_clf = sk_cal.CalibratedClassifierCV(clf, method='isotonic', cv=10)
+
+		calibrated_clf.fit(X_train, Y_train)
+
 		try:
-			Y_prob = clf.fit(X_train, Y_train).predict_proba(X_test)
+			Y_prob = calibrated_clf.predict_proba(X_test)
 			predicted_probability.append(Y_prob[:,1])
 		except:
-			Y_prob = clf.fit(X_train, Y_train).decision_function(X_test)
+			Y_prob = calibrated_clf.decision_function(X_test)
 			predicted_probability.append(Y_prob)
 		true_label.append(list(Y_test.values.flat))
 
@@ -166,17 +186,27 @@ def predict_groupkfold_ML(data, label, features, group_label, cv_type, clf, seed
 		X_train, X_test = X.iloc[train_index], X.iloc[test_index]
 		Y_train, Y_test = Y.iloc[train_index], Y.iloc[test_index]
 		G_train, G_test = G.iloc[train_index], G.iloc[test_index]
+
 		try:
-			try:
-				Y_prob = clf.fit(X_train, Y_train, groups=G_train).predict_proba(X_test)
-			except:
-				Y_prob = clf.fit(X_train, Y_train).predict_proba(X_test)
+			clf.fit(X_train, Y_train, groups=G_train)
+		except:
+			clf.fit(X_train, Y_train)
+
+		if hasattr(clf, 'best_estimator_'):
+			calibrated_clf = sk_cal.CalibratedClassifierCV(clf.best_estimator_, method='isotonic', cv=10)
+		else:
+			calibrated_clf = sk_cal.CalibratedClassifierCV(clf, method='isotonic', cv=10)
+
+		try:
+			calibrated_clf.fit(X_train, Y_train, groups=G_train)
+		except:
+			calibrated_clf.fit(X_train, Y_train)
+
+		try:
+			Y_prob = calibrated_clf.predict_proba(X_test)
 			predicted_probability.append(Y_prob[:,1])
 		except:
-			try:
-				Y_prob = clf.fit(X_train, Y_train, groups=G_train).decision_function(X_test)
-			except:
-				Y_prob = clf.fit(X_train, Y_train).decision_function(X_test)
+			Y_prob = calibrated_clf.decision_function(X_test)
 			predicted_probability.append(Y_prob)
 		true_label.append(list(Y_test.values.flat))
 
