@@ -480,13 +480,30 @@ def mdaeli5_analysis(data, label, features,clf,clf_name):
 	for value, std, column in sorted(zip(pi_cv, std_pi_cv, X.columns), reverse = True):
 		print(f'{column:20}', f'{value/pi_cv.max():4.3f}', f'{std/pi_cv.max():4.3f}')
 
-	eli5_pi = eli5.sklearn.PermutationImportance(clf, scoring='roc_auc', n_iter=20, random_state=None, cv=None)
+	# eli5_pi = eli5.sklearn.PermutationImportance(clf, scoring='roc_auc', n_iter=20, random_state=None, cv=None)
+	# eli5_pi.fit(X.values,Y.values)
+	# pi_cv = eli5_pi.feature_importances_
+	# std_pi_cv = eli5_pi.feature_importances_std_
+	#
+	# print(clf_name, "eli5 MDA importances trained and tested on the same dataset")
+	# for value, std, column in sorted(zip(pi_cv, std_pi_cv, X.columns), reverse = True):
+	# 	print(f'{column:20}', f'{value/pi_cv.max():4.3f}', f'{std/pi_cv.max():4.3f}')
+
+	return (pi_cv, std_pi_cv)
+
+def mdaeli5_analysis_ext(data, label, features, final_model,clf_name):
+
+	X = data.loc[:,features]
+	Y = data.loc[:,[label]]
+
+	eli5_pi = eli5.sklearn.PermutationImportance(final_model, scoring='roc_auc', n_iter=20, random_state=None, cv='prefit')
 	eli5_pi.fit(X.values,Y.values)
 	pi_cv = eli5_pi.feature_importances_
 	std_pi_cv = eli5_pi.feature_importances_std_
 
-	print(clf_name, "eli5 MDA importances trained and tested on the same dataset")
+	print(clf_name, "eli5 MDA importances on external Dataset")
 	for value, std, column in sorted(zip(pi_cv, std_pi_cv, X.columns), reverse = True):
 		print(f'{column:20}', f'{value/pi_cv.max():4.3f}', f'{std/pi_cv.max():4.3f}')
+
 
 	return (pi_cv, std_pi_cv)

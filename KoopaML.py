@@ -596,13 +596,14 @@ class ThresholdPoints(luigi.Task):
 	wf_name = luigi.Parameter()
 	list_RS = luigi.ListParameter(default=list(RS_info.keys()))
 	list_ML = luigi.ListParameter(default=list(ML_info.keys()))
+	ext_val = luigi.Parameter(default = 'No')
 
 
 	def requires(self):
 		if (self.clf_or_score in self.list_RS):
-			return EvaluateRiskScore(wf_name=self.wf_name, score_name = self.clf_or_score)
+			return EvaluateRiskScore(wf_name=self.wf_name, score_name = self.clf_or_score, ext_val = self.ext_val)
 		elif (self.clf_or_score in self.list_ML):
-			return Evaluate_ML(wf_name=self.wf_name, clf_name=self.clf_or_score)
+			return Evaluate_ML(wf_name=self.wf_name, clf_name=self.clf_or_score, ext_val=self.ext_val)
 		else:
 			raise Exception(f"{self.clf_score} not in list_ristkscores or list_MLmodels")
 
@@ -667,22 +668,26 @@ class ThresholdPoints(luigi.Task):
 			os.makedirs(os.path.join(tmp_path,self.__class__.__name__))
 		except:
 			pass
-		return luigi.LocalTarget(os.path.join(tmp_path,self.__class__.__name__, f"Thresholds_{self.wf_name}_{self.clf_or_score}.txt"))
+		if self.ext_val == 'No':
+			return luigi.LocalTarget(os.path.join(tmp_path,self.__class__.__name__, f"Thresholds_{self.wf_name}_{self.clf_or_score}.txt"))
+		elif self.ext_val == 'Yes':
+			return luigi.LocalTarget(os.path.join(tmp_path,self.__class__.__name__, f"Thresholds_{self.wf_name}_{self.clf_or_score}_EXT.txt"))
 
 class BestMLModelReport(luigi.Task):
 	wf_name = luigi.Parameter()
 	list_ML = luigi.ListParameter(default=list(ML_info.keys()))
+	ext_val = luigi.Parameter(default='No')
 	all_ML_importances = luigi.BoolParameter(default=True)
 
 	def requires(self):
 		requirements = {}
 		requirements['fillna_DB'] = FillnaDatabase()
 		for i in self.list_ML:
-			requirements[i] = Evaluate_ML(clf_name = i, wf_name = self.wf_name)
-			requirements[i+'_threshold'] = ThresholdPoints(clf_or_score = i, wf_name = self.wf_name, list_ML = self.list_ML)
-			requirements[i+'_allthresholds'] = AllThresholds(clf_or_score = i, wf_name = self.wf_name, list_ML = self.list_ML)
+			requirements[i] = Evaluate_ML(clf_name = i, wf_name = self.wf_name, ext_val=self.ext_val)
+			requirements[i+'_threshold'] = ThresholdPoints(clf_or_score = i, wf_name = self.wf_name, list_ML = self.list_ML, ext_val=self.ext_val)
+			requirements[i+'_allthresholds'] = AllThresholds(clf_or_score = i, wf_name = self.wf_name, list_ML = self.list_ML, ext_val=self.ext_val)
 			if self.all_ML_importances:
-				requirements[i+'_importances'] = MDAFeatureImportances(clf_name = i, wf_name = self.wf_name)
+				requirements[i+'_importances'] = MDAFeatureImportances(clf_name = i, wf_name = self.wf_name, ext_val=self.ext_val)
 		return requirements
 
 	def run(self):
@@ -716,7 +721,7 @@ class BestMLModelReport(luigi.Task):
 					for line in f3.readlines():
 						f.write(line)
 			else:
-				prerequisite = MDAFeatureImportances(clf_name = best_ml, wf_name = self.wf_name)
+				prerequisite = MDAFeatureImportances(clf_name = best_ml, wf_name = self.wf_name, ext_val = self.ext_val)
 				luigi.build([prerequisite], local_scheduler = False)
 				with open(prerequisite.output().path, 'r') as f3:
 					for line in f3.readlines():
@@ -727,18 +732,22 @@ class BestMLModelReport(luigi.Task):
 			os.makedirs(os.path.join(report_path,self.wf_name))
 		except:
 			pass
-		return luigi.LocalTarget(os.path.join(report_path,self.wf_name,f"BestML_Model_report_{self.wf_name}.txt"))
+		if self.ext_val == 'No':
+			return luigi.LocalTarget(os.path.join(report_path,self.wf_name,f"BestML_Model_report_{self.wf_name}.txt"))
+		elif self.ext_val == 'Yes':
+			return luigi.LocalTarget(os.path.join(report_path,self.wf_name,f"BestML_Model_report_{self.wf_name}_EXT.txt"))
 
 class BestRSReport(luigi.Task):
 	wf_name = luigi.Parameter()
 	list_RS = luigi.ListParameter(default=list(RS_info.keys()))
+	ext_val = luigi.Parameter(default = 'No')
 
 	def requires(self):
 		requirements = {}
 		for i in self.list_RS:
-			requirements[i] = EvaluateRiskScore(score_name = i, wf_name = self.wf_name)
-			requirements[i+'_threshold'] = AllThresholds(clf_or_score = i, wf_name = self.wf_name, list_RS=self.list_RS)
-			requirements[i+'_hanley'] = ConfidenceIntervalHanleyRS(score_name = i, wf_name = self.wf_name)
+			requirements[i] = EvaluateRiskScore(score_name = i, wf_name = self.wf_name, ext_val = self.ext_val)
+			requirements[i+'_threshold'] = AllThresholds(clf_or_score = i, wf_name = self.wf_name, list_RS=self.list_RS, ext_val = self.ext_val)
+			requirements[i+'_hanley'] = ConfidenceIntervalHanleyRS(score_name = i, wf_name = self.wf_name, ext_val = self.ext_val)
 		return requirements
 
 	def run(self):
@@ -772,43 +781,62 @@ class BestRSReport(luigi.Task):
 			os.makedirs(os.path.join(report_path,self.wf_name))
 		except:
 			pass
-		return luigi.LocalTarget(os.path.join(report_path,self.wf_name,f"BestRS_report_{self.wf_name}.txt"))
+		if self.ext_val == 'No':
+			return luigi.LocalTarget(os.path.join(report_path,self.wf_name,f"BestRS_report_{self.wf_name}.txt"))
+		elif self.ext_val  == 'Yes':
+			return luigi.LocalTarget(os.path.join(report_path,self.wf_name,f"BestRS_report_{self.wf_name}_EXT.txt"))
+
 
 class MDAFeatureImportances(luigi.Task):
 	clf_name = luigi.Parameter()
 	wf_name = luigi.Parameter()
+	ext_val = luigi.Parameter(default='No')
 
 	def requires(self):
-		return FillnaDatabase()
+		if self.ext_val == 'No':
+			return {'df': FillnaDatabase()}
+		elif self.ext_val == 'Yes':
+			return {'df': FillnaExternalDatabase(),
+			 		'clf': FinalModelAndHyperparameterResults(clf_name=self.clf_name, wf_name=self.wf_name)}
 
 	def run(self):
 		with open(self.output().path,'w') as f:
 			with contextlib.redirect_stdout(f):
-				df_input = pd.read_pickle(self.input()["pickle"].path)
+				df_input = pd.read_pickle(self.input()['df']["pickle"].path)
 				df_filtered = WF_info[self.wf_name]["filter_function"](df_input)
 				label = WF_info[self.wf_name]["label_name"]
 				features = WF_info[self.wf_name]["feature_list"]
 
-				(pi_cv, std_pi_cv) = mdaeli5_analysis(df_filtered, label, features, clf=ML_info[self.clf_name]["clf"],clf_name=self.clf_name)
-
+				if self.ext_val == 'No':
+					(pi_cv, std_pi_cv) = mdaeli5_analysis(df_filtered, label, features, clf=ML_info[self.clf_name]["clf"],clf_name=self.clf_name)
+				elif self.ext_val == 'Yes':
+					with open(self.input()["clf"].path, 'rb') as f:
+						clf = pickle.load(f)
+					(pi_cv, std_pi_cv) = mdaeli5_analysis_ext(df_filtered, label, features, final_model = clf,clf_name=self.clf_name)
+					pass
 	def output(self):
 		try:
 			os.makedirs(os.path.join(tmp_path,self.__class__.__name__))
 		except:
 			pass
-		return luigi.LocalTarget(os.path.join(tmp_path,self.__class__.__name__,f"MDAeli5_Log_{self.wf_name}_{self.clf_name}.txt"))
+
+		if self.ext_val == 'No':
+			return luigi.LocalTarget(os.path.join(tmp_path,self.__class__.__name__,f"MDAeli5_Log_{self.wf_name}_{self.clf_name}.txt"))
+		elif self.ext_val == 'Yes':
+			return luigi.LocalTarget(os.path.join(tmp_path,self.__class__.__name__,f"MDAeli5_Log_{self.wf_name}_{self.clf_name}_EXT.txt"))
 
 class AllThresholds(luigi.Task):
 	clf_or_score=luigi.Parameter()
 	wf_name = luigi.Parameter()
 	list_RS = luigi.ListParameter(default=list(RS_info.keys()))
 	list_ML = luigi.ListParameter(default=list(ML_info.keys()))
+	ext_val = luigi.Parameter(default='No')
 
 	def requires(self):
 		if (self.clf_or_score in self.list_RS):
-			return EvaluateRiskScore(wf_name=self.wf_name, score_name = self.clf_or_score)
+			return EvaluateRiskScore(wf_name=self.wf_name, score_name = self.clf_or_score, ext_val = self.ext_val)
 		elif (self.clf_or_score in self.list_ML):
-			return Evaluate_ML(wf_name=self.wf_name, clf_name=self.clf_or_score)
+			return Evaluate_ML(wf_name=self.wf_name, clf_name=self.clf_or_score, ext_val = self.ext_val)
 		else:
 			raise Exception(f"{self.clf_score} not in list_ristkscores or list_MLmodels")
 
@@ -836,9 +864,12 @@ class AllThresholds(luigi.Task):
 			os.makedirs(os.path.join(tmp_path,self.__class__.__name__))
 		except:
 			pass
-		return {'txt': luigi.LocalTarget(os.path.join(tmp_path,self.__class__.__name__, f"Thresholds_{self.wf_name}_{self.clf_or_score}.txt")),
-				'df': luigi.LocalTarget(os.path.join(tmp_path,self.__class__.__name__, f"Thresholds_{self.wf_name}_{self.clf_or_score}.csv"))}
-
+		if self.ext_val == 'No':
+			return {'txt': luigi.LocalTarget(os.path.join(tmp_path,self.__class__.__name__, f"Thresholds_{self.wf_name}_{self.clf_or_score}.txt")),
+					'df': luigi.LocalTarget(os.path.join(tmp_path,self.__class__.__name__, f"Thresholds_{self.wf_name}_{self.clf_or_score}.csv"))}
+		elif self.ext_val == 'Yes':
+			return {'txt': luigi.LocalTarget(os.path.join(tmp_path,self.__class__.__name__, f"Thresholds_{self.wf_name}_{self.clf_or_score}_EXT.txt")),
+					'df': luigi.LocalTarget(os.path.join(tmp_path,self.__class__.__name__, f"Thresholds_{self.wf_name}_{self.clf_or_score}_EXT.csv"))}
 class OnlyGraphs(luigi.Task):
 
 	list_ML = luigi.ListParameter(default=list(ML_info.keys()))
