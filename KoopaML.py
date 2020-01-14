@@ -8,8 +8,8 @@ import sklearn.calibration as sk_cal
 import luigi
 import contextlib
 
-from utils.crossvalidation import predict_kfold_ML, predict_kfold_RS, predict_groupkfold_ML, predict_groupkfold_RS, external_validation, external_validation_RS
-from utils.analysis import AUC_stderr_classic,AUC_stderr_hanley, group_files_analyze, mdaeli5_analysis, plot_all_aucs, paired_ttest, cutoff_threshold_maxfbeta, cutoff_threshold_single, cutoff_threshold_double, cutoff_threshold_triple,cutoff_threshold_accuracy, all_thresholds, create_descriptive_xls
+from utils.crossvalidation import predict_kfold_ML, predict_kfold_RS, predict_filter_kfold_ML, predict_filter_kfold_RS,predict_groupkfold_ML, predict_groupkfold_RS, external_validation, external_validation_RS
+from utils.analysis import AUC_stderr_classic,AUC_stderr_hanley, group_files_analyze, mdaeli5_analysis, mdaeli5_analysis_ext, plot_all_aucs, paired_ttest, cutoff_threshold_maxfbeta, cutoff_threshold_single, cutoff_threshold_double, cutoff_threshold_triple,cutoff_threshold_accuracy, all_thresholds, create_descriptive_xls
 from user_data_utils import load_database, clean_database, process_database, fillna_database
 from user_external_data_utils import load_external_database, clean_external_database, process_external_database, fillna_external_database
 from user_MLmodels_info import ML_info
@@ -403,9 +403,13 @@ class ConfidenceIntervalHanleyRS(luigi.Task):
 
 class DescriptiveXLS(luigi.Task):
 	wf_name = luigi.Parameter()
+	ext_val = luigi.Parameter(default='No')
 
 	def requires(self):
-		return ProcessDatabase()
+		if(self.ext_val == 'Yes'):
+			return ProcessExternalDatabase()
+		else:
+			return ProcessDatabase()
 
 	def run(self):
 		df_input = pd.read_pickle(self.input()["pickle"].path)
@@ -420,7 +424,10 @@ class DescriptiveXLS(luigi.Task):
 			os.makedirs(os.path.join(report_path, self.wf_name))
 		except:
 			pass
-		return luigi.LocalTarget(os.path.join(report_path, self.wf_name, f"{self.wf_name}_descriptivo.xlsx"))
+		if(self.ext_val == 'No'):
+			return luigi.LocalTarget(os.path.join(report_path, self.wf_name, f"{self.wf_name}_descriptivo.xlsx"))
+		elif(self.ext_val == 'Yes'):
+			return luigi.LocalTarget(os.path.join(report_path, self.wf_name, f"{self.wf_name}_descriptivo_EXT.xlsx"))
 
 class FinalModelAndHyperparameterResults(luigi.Task):
 	clf_name = luigi.Parameter()
@@ -1008,6 +1015,7 @@ class AllTasks(luigi.Task):
 			for it_clf_name in self.list_ML:
 				yield FinalModelAndHyperparameterResults(wf_name = it_wf_name, clf_name = it_clf_name)
 			if(WF_info[it_wf_name]['external_validation'] == 'Yes'):
+				yield DescriptiveXLS(wf_name = it_wf_name, ext_val = 'Yes')
 				yield GraphsWF(wf_name = it_wf_name, list_ML=self.list_ML, list_RS=self.list_RS, ext_val = 'Yes')
 				yield BestMLModelReport(wf_name = it_wf_name, list_ML=self.list_ML, ext_val = 'Yes')
 				yield BestRSReport(wf_name = it_wf_name, list_RS=self.list_RS, ext_val = 'Yes')
