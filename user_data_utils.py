@@ -14,3 +14,6 @@ def process_database(df):
 def fillna_database(df):
 	df=df.fillna(0)
 	return df
+
+def preprocess_filtered_database(df, wf_name):
+	return df

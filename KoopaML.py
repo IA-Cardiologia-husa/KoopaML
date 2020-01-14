@@ -10,8 +10,8 @@ import contextlib
 
 from utils.crossvalidation import predict_kfold_ML, predict_kfold_RS, predict_filter_kfold_ML, predict_filter_kfold_RS,predict_groupkfold_ML, predict_groupkfold_RS, external_validation, external_validation_RS
 from utils.analysis import AUC_stderr_classic,AUC_stderr_hanley, group_files_analyze, mdaeli5_analysis, mdaeli5_analysis_ext, plot_all_aucs, paired_ttest, cutoff_threshold_maxfbeta, cutoff_threshold_single, cutoff_threshold_double, cutoff_threshold_triple,cutoff_threshold_accuracy, all_thresholds, create_descriptive_xls
-from user_data_utils import load_database, clean_database, process_database, fillna_database
-from user_external_data_utils import load_external_database, clean_external_database, process_external_database, fillna_external_database
+from user_data_utils import load_database, clean_database, process_database, fillna_database, preprocess_filtered_database
+from user_external_data_utils import load_external_database, clean_external_database, process_external_database, fillna_external_database, preprocess_filtered_external_database
 from user_MLmodels_info import ML_info
 from user_RiskScores_info import RS_info
 from user_Workflow_info import WF_info
@@ -75,6 +75,28 @@ class FillnaDatabase(luigi.Task):
 		return {"pickle": luigi.LocalTarget(os.path.join(tmp_path,self.__class__.__name__, "df_fillna.pickle")),
 				"xls": luigi.LocalTarget(os.path.join(tmp_path,self.__class__.__name__, "df_fillna.xls"))}
 
+class FilterPreprocessDatabase(luigi.Task):
+	wf_name = luigi.Parameter()
+
+	def requires(self):
+		return FillnaDatabase()
+
+	def run(self):
+		df_input = pd.read_pickle(self.input()["pickle"].path)
+		filter_function = WF_info[self.wf_name]["filter_function"]
+		df_filtered = filter_function(df_input)
+		df_preprocessed = preprocess_filtered_database(df_filtered, self.wf_name)
+		df_preprocessed.to_pickle(self.output()["pickle"].path)
+		df_preprocessed.to_excel(self.output()["xls"].path, index=False)
+
+		def output(self):
+			try:
+				os.makedirs(os.path.join(tmp_path,self.__class__.__name__))
+			except:
+				pass
+			return {"pickle": luigi.LocalTarget(os.path.join(tmp_path,self.__class__.__name__, f"df_filtered_preprocessed_{self.wf_name}.pickle")),
+					"xls": luigi.LocalTarget(os.path.join(tmp_path,self.__class__.__name__, f"df_filtered_preprocessed_{self.wf_name}.xls"))}
+
 class CleanExternalDatabase(luigi.Task):
 	def run(self):
 		df_input = load_external_database()
@@ -126,24 +148,46 @@ class FillnaExternalDatabase(luigi.Task):
 		return {"pickle": luigi.LocalTarget(os.path.join(tmp_path,self.__class__.__name__, "external_df_fillna.pickle")),
 				"xls": luigi.LocalTarget(os.path.join(tmp_path,self.__class__.__name__, "external_df_fillna.xls"))}
 
+class FilterPreprocessExternalDatabase(luigi.Task):
+	wf_name = luigi.Parameter()
+
+	def requires(self):
+		return FillnaExternalDatabase()
+
+	def run(self):
+		df_input = pd.read_pickle(self.input()["pickle"].path)
+		filter_function = WF_info[self.wf_name]["filter_function"]
+		df_filtered = filter_function(df_input)
+		df_preprocessed = preprocess_filtered_external_database(df_filtered, self.wf_name)
+		df_preprocessed .to_pickle(self.output()["pickle"].path)
+		df_preprocessed .to_excel(self.output()["xls"].path, index=False)
+
+		def output(self):
+			try:
+				os.makedirs(os.path.join(tmp_path,self.__class__.__name__))
+			except:
+				pass
+			return {"pickle": luigi.LocalTarget(os.path.join(tmp_path,self.__class__.__name__, f"external_df_filtered_preprocessed_{self.wf_name}.pickle")),
+					"xls": luigi.LocalTarget(os.path.join(tmp_path,self.__class__.__name__, f"external_df_filtered_preprocessed_{self.wf_name}.xls"))}
+
 class ExternalValidation(luigi.Task):
 	clf_name = luigi.Parameter()
 	wf_name = luigi.Parameter()
 
 	def requires(self):
-		return {'external_data': FillnaExternalDatabase(),
+		return {'external_data': FilterPreprocessExternalDatabase(self.wf_name),
+				'unfiltered_data': FillnaExternalDatabase(),
 				'clf': FinalModelAndHyperparameterResults(wf_name = self.wf_name, clf_name = self.clf_name)
 				}
 
 	def run(self):
 		df_input = pd.read_pickle(self.input()["external_data"]["pickle"].path)
-		df_filtered = WF_info[self.wf_name]["filter_function"](df_input)
 		features = WF_info[self.wf_name]["feature_list"]
 		label = WF_info[self.wf_name]["label_name"]
 		with open(self.input()["clf"].path, 'rb') as f:
 			clf = pickle.load(f)
 
-		tl_pp_dict = external_validation(df_filtered, label, features, clf)
+		tl_pp_dict = external_validation(df_input, label, features, clf)
 
 		with open(self.output().path, 'wb') as f:
 			# Pickle the 'data' dictionary using the highest protocol available.
@@ -161,16 +205,15 @@ class ExternalValidationRS(luigi.Task):
 	wf_name = luigi.Parameter()
 
 	def requires(self):
-		return FillnaExternalDatabase()
+		return FilterPreprocessExternalDatabase(self.wf_name)
 
 	def run(self):
 		df_input = pd.read_pickle(self.input()["pickle"].path)
-		df_filtered = WF_info[self.wf_name]["filter_function"](df_input)
 		label = WF_info[self.wf_name]["label_name"]
 		score_label = RS_info[self.score_name]["label_name"]
 		sign = RS_info[self.score_name]["sign"]
 
-		tl_pp_dict = external_validation_RS(df_filtered, label, score_label, sign)
+		tl_pp_dict = external_validation_RS(df_input, label, score_label, sign)
 
 		with open(self.output().path, 'wb') as f:
 			# Pickle the 'data' dictionary using the highest protocol available.
@@ -190,7 +233,8 @@ class CalculateKFold(luigi.Task):
 	wf_name = luigi.Parameter()
 
 	def requires(self):
-		return FillnaDatabase()
+		return {'data':FilterPreprocessDatabase(self.wf_name),
+				'unfiltered_data': FillnaDatabase()}
 
 	def run(self):
 		try:
@@ -200,9 +244,8 @@ class CalculateKFold(luigi.Task):
 
 		with open(os.path.join(log_path,self.__class__.__name__,f"Log_{self.wf_name}_{self.clf_name}_{self.seed}.txt"),'w') as f:
 			with contextlib.redirect_stdout(f):
-				df_input = pd.read_pickle(self.input()["pickle"].path)
-				filter_function = WF_info[self.wf_name]["filter_function"]
-				df_filtered = filter_function(df_input)
+				df_input = pd.read_pickle(self.input()["unfiltered_data"]["pickle"].path)
+				df_filtered = pd.read_pickle(self.input()["data"]["pickle"].path)
 				features = WF_info[self.wf_name]["feature_list"]
 				label = WF_info[self.wf_name]["label_name"]
 				group_label = WF_info[self.wf_name]["group_label"]
@@ -237,7 +280,8 @@ class RiskScore_KFold(luigi.Task):
 	wf_name = luigi.Parameter()
 
 	def requires(self):
-		return FillnaDatabase()
+		return {'data':FilterPreprocessDatabase(self.wf_name),
+				'unfiltered_data': FillnaDatabase()}
 
 	def run(self):
 		try:
@@ -246,9 +290,8 @@ class RiskScore_KFold(luigi.Task):
 			pass
 		with open(os.path.join(log_path,self.__class__.__name__,f"Log_{self.wf_name}_{self.score_name}_{self.seed}.txt"),'w') as f:
 			with contextlib.redirect_stdout(f):
-				df_input = pd.read_pickle(self.input()["pickle"].path)
-				filter_function = WF_info[self.wf_name]["filter_function"]
-				df_filtered = filter_function(df_input)
+				df_input = pd.read_pickle(self.input()["unfiltered_data"]["pickle"].path)
+				df_filtered = pd.read_pickle(self.input()["data"]["pickle"].path)
 				label = WF_info[self.wf_name]["label_name"]
 				features = WF_info[self.wf_name]["feature_list"]
 				group_label = WF_info[self.wf_name]["group_label"]
@@ -373,7 +416,10 @@ class ConfidenceIntervalHanleyRS(luigi.Task):
 	ext_val = luigi.Parameter(default = 'No')
 
 	def requires(self):
-		return FillnaDatabase()
+		if (self.ext_val == 'No'):
+			return FilterPreprocessDatabase(self.wf_name)
+		elif (self.ext_val == 'Si'):
+			return FilterPreprocessExternalDatabase(self.wf_name)
 
 	def run(self):
 		df_input = pd.read_pickle(self.input()["pickle"].path)
@@ -434,11 +480,10 @@ class FinalModelAndHyperparameterResults(luigi.Task):
 	wf_name = luigi.Parameter()
 
 	def requires(self):
-		return FillnaDatabase()
+		return FilterPreprocessDatabase(self.wf_name)
 
 	def run(self):
-		df_input = pd.read_pickle(self.input()["pickle"].path)
-		df_filtered = WF_info[self.wf_name]["filter_function"](df_input)
+		df_filtered = pd.read_pickle(self.input()["pickle"].path)
 		label = WF_info[self.wf_name]["label_name"]
 		features = WF_info[self.wf_name]["feature_list"]
 		group_label = WF_info[self.wf_name]["group_label"]
@@ -688,7 +733,6 @@ class BestMLModelReport(luigi.Task):
 
 	def requires(self):
 		requirements = {}
-		requirements['fillna_DB'] = FillnaDatabase()
 		for i in self.list_ML:
 			requirements[i] = Evaluate_ML(clf_name = i, wf_name = self.wf_name, ext_val=self.ext_val)
 			requirements[i+'_threshold'] = ThresholdPoints(clf_or_score = i, wf_name = self.wf_name, list_ML = self.list_ML, ext_val=self.ext_val)
@@ -710,8 +754,6 @@ class BestMLModelReport(luigi.Task):
 
 		with open(self.input()[best_ml]["auc_results"].path, 'rb') as f:
 			best_ml_results_dict=pickle.load(f)
-
-
 
 		with open(self.output().path,'w') as f:
 			f.write(f"Model name: {best_ml}\n")
@@ -801,9 +843,9 @@ class MDAFeatureImportances(luigi.Task):
 
 	def requires(self):
 		if self.ext_val == 'No':
-			return {'df': FillnaDatabase()}
+			return {'df': FilterPreprocessDatabase(self.wf_name)}
 		elif self.ext_val == 'Yes':
-			return {'df': FillnaExternalDatabase(),
+			return {'df': FilterPreprocessExternalDatabase(self.wf_name),
 			 		'clf': FinalModelAndHyperparameterResults(clf_name=self.clf_name, wf_name=self.wf_name)}
 
 	def run(self):
