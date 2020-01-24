@@ -89,13 +89,13 @@ class FilterPreprocessDatabase(luigi.Task):
 		df_preprocessed.to_pickle(self.output()["pickle"].path)
 		df_preprocessed.to_excel(self.output()["xls"].path, index=False)
 
-		def output(self):
-			try:
-				os.makedirs(os.path.join(tmp_path,self.__class__.__name__))
-			except:
-				pass
-			return {"pickle": luigi.LocalTarget(os.path.join(tmp_path,self.__class__.__name__, f"df_filtered_preprocessed_{self.wf_name}.pickle")),
-					"xls": luigi.LocalTarget(os.path.join(tmp_path,self.__class__.__name__, f"df_filtered_preprocessed_{self.wf_name}.xls"))}
+	def output(self):
+		try:
+			os.makedirs(os.path.join(tmp_path,self.__class__.__name__))
+		except:
+			pass
+		return {"pickle": luigi.LocalTarget(os.path.join(tmp_path,self.__class__.__name__, f"df_filtered_preprocessed_{self.wf_name}.pickle")),
+				"xls": luigi.LocalTarget(os.path.join(tmp_path,self.__class__.__name__, f"df_filtered_preprocessed_{self.wf_name}.xls"))}
 
 class CleanExternalDatabase(luigi.Task):
 	def run(self):
@@ -162,13 +162,13 @@ class FilterPreprocessExternalDatabase(luigi.Task):
 		df_preprocessed .to_pickle(self.output()["pickle"].path)
 		df_preprocessed .to_excel(self.output()["xls"].path, index=False)
 
-		def output(self):
-			try:
-				os.makedirs(os.path.join(tmp_path,self.__class__.__name__))
-			except:
-				pass
-			return {"pickle": luigi.LocalTarget(os.path.join(tmp_path,self.__class__.__name__, f"external_df_filtered_preprocessed_{self.wf_name}.pickle")),
-					"xls": luigi.LocalTarget(os.path.join(tmp_path,self.__class__.__name__, f"external_df_filtered_preprocessed_{self.wf_name}.xls"))}
+	def output(self):
+		try:
+			os.makedirs(os.path.join(tmp_path,self.__class__.__name__))
+		except:
+			pass
+		return {"pickle": luigi.LocalTarget(os.path.join(tmp_path,self.__class__.__name__, f"external_df_filtered_preprocessed_{self.wf_name}.pickle")),
+				"xls": luigi.LocalTarget(os.path.join(tmp_path,self.__class__.__name__, f"external_df_filtered_preprocessed_{self.wf_name}.xls"))}
 
 class ExternalValidation(luigi.Task):
 	clf_name = luigi.Parameter()
