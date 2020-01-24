@@ -264,7 +264,7 @@ def fbeta(p,r,beta):
 		return 0
 	return (1+beta**2)*r*p/(beta**2*p+r)
 
-def plot_all_aucs(task_requires, fig_path,title):
+def plot_all_rocs(task_requires, fig_path,title):
 	plt.figure(figsize=(10,10))
 	plt.xlim([-0.05, 1.05])
 	plt.ylim([-0.05, 1.05])
@@ -293,7 +293,46 @@ def plot_all_aucs(task_requires, fig_path,title):
 		true_label = true_label[~np.isnan(true_label)]
 
 		fpr, tpr, thresholds = sk_m.roc_curve(true_label,pred_prob)
-		plt.plot(fpr, tpr, lw=2, alpha=1, color=cmap(color_index) , label = f'{score_name}: AUC ={results_dict["avg_auc"]:1.2f} ({results_dict["95ci_low"]:1.2f}-{results_dict["95ci_high"]:1.2f})' )
+		plt.plot(fpr, tpr, lw=2, alpha=1, color=cmap(color_index) , label = f'{score_name}: AUC ={results_dict["avg_aucroc"]:1.2f} ({results_dict["aucroc_95ci_low"]:1.2f}-{results_dict["aucroc_95ci_high"]:1.2f})' )
+		color_index+=1
+
+	plt.title(title, fontsize=20)
+	plt.xlabel('1-specificity', fontsize = 15)
+	plt.ylabel('sensitivity', fontsize = 15)
+	plt.legend(loc="lower right", fontsize = 15)
+
+	plt.savefig(fig_path)
+	
+def plot_all_prs(task_requires, fig_path,title):
+	plt.figure(figsize=(10,10))
+	plt.xlim([-0.05, 1.05])
+	plt.ylim([-0.05, 1.05])
+	#plt.plot([0, 1], [0, 1], linestyle='--', lw=2, color='grey', label='Luck', alpha=.8)
+	cmap=plt.get_cmap("tab10")
+	if(len(task_requires)>10) :
+		cmap=plt.get_cmap("tab20")
+	color_index=0
+
+	for score in task_requires.keys():
+		with open(task_requires[score]["pred_prob"].path, 'rb') as f:
+			pred_prob=pickle.load(f)
+		with open(task_requires[score]["true_label"].path, 'rb') as f:
+			true_label=pickle.load(f)
+		with open(task_requires[score]["auc_results"].path, 'rb') as f:
+			results_dict=pickle.load(f)
+
+		if(score in ML_info.keys()):
+			score_name = ML_info[score]["formal_name"]
+		elif(score in RS_info.keys()):
+			score_name = RS_info[score]["formal_name"]
+		else:
+			score_name = "ERROR: Unknown score or classifier"
+
+		pred_prob = pred_prob[~np.isnan(true_label)]
+		true_label = true_label[~np.isnan(true_label)]
+
+		prec, recall, thresholds = sk_m.precision_recall_curve(true_label,pred_prob)
+		plt.plot(recall, prec, lw=2, alpha=1, color=cmap(color_index) , label = f'{score_name}: AUC ={results_dict["avg_aucpr"]:1.2f} ({results_dict["aucpr_95ci_low"]:1.2f}-{results_dict["aucpr_95ci_high"]:1.2f})' )
 		color_index+=1
 
 	plt.title(title, fontsize=20)
@@ -307,8 +346,10 @@ def plot_all_aucs(task_requires, fig_path,title):
 def group_files_analyze(task_requires, clf_name):
 	n_reps=0
 	n_repfolds=0
-	score=0
-	score2=0
+	aucroc_score=0
+	aucroc_score2=0
+	aucpr_score=0
+	aucpr_score2=0
 	unfolded_true_label = []
 	unfolded_pred_prob = []
 
@@ -322,8 +363,10 @@ def group_files_analyze(task_requires, clf_name):
 			n_repfolds+=1
 			true_label = np.array(true_label)
 			pred_prob = np.array(pred_prob)
-			score+=sk_m.roc_auc_score(true_label[~np.isnan(true_label)].astype(bool),pred_prob[~np.isnan(true_label)])
-			score2+=sk_m.roc_auc_score(true_label[~np.isnan(true_label)].astype(bool),pred_prob[~np.isnan(true_label)])**2
+			aucroc_score+=sk_m.roc_auc_score(true_label[~np.isnan(true_label)].astype(bool),pred_prob[~np.isnan(true_label)])
+			aucroc_score2+=aucroc_score**2
+			aucpr_score+=sk_m.average_precision_score(true_label[~np.isnan(true_label)].astype(bool),pred_prob[~np.isnan(true_label)])
+			aucpr_score2+=aucpr_score**2
 			unfolded_true_label+=list(true_label)
 			unfolded_pred_prob+=list(pred_prob)
 
@@ -332,27 +375,43 @@ def group_files_analyze(task_requires, clf_name):
 	unfolded_true_label=np.array(unfolded_true_label)
 	unfolded_pred_prob = np.array(unfolded_pred_prob)
 
-	pooling_auc = sk_m.roc_auc_score(unfolded_true_label[~np.isnan(unfolded_true_label)].astype(bool),unfolded_pred_prob[~np.isnan(unfolded_true_label)])
-	averaging_auc = score/n_repfolds
-	averaging_sample_variance = (score2-score**2/n_repfolds)/(n_repfolds-1)
+	pooling_aucroc = sk_m.roc_auc_score(unfolded_true_label[~np.isnan(unfolded_true_label)].astype(bool),unfolded_pred_prob[~np.isnan(unfolded_true_label)])
+	averaging_aucroc = aucroc_score/n_repfolds
+	averaging_sample_variance_aucroc = (aucroc_score2-aucroc_score**2/n_repfolds)/(n_repfolds-1)
+	
+	pooling_aucpr = sk_m.average_precision_score(unfolded_true_label[~np.isnan(unfolded_true_label)].astype(bool),unfolded_pred_prob[~np.isnan(unfolded_true_label)])
+	averaging_aucpr = aucpr_score/n_repfolds
+	averaging_sample_variance_aucpr = (aucpr_score2-aucpr_score**2/n_repfolds)/(n_repfolds-1)
+	
 	critical_pvalue=0.05
 	c = sc_st.t.ppf(1-critical_pvalue/2, df= n_repfolds-1)
 
 	if(n_folds>1):
-		std_error = np.sqrt(averaging_sample_variance*(1/n_repfolds+1/(n_folds-1)))
+		std_error_aucroc = np.sqrt(averaging_sample_variance_aucroc*(1/n_repfolds+1/(n_folds-1)))
+		std_error_aucpr = np.sqrt(averaging_sample_variance_aucpr*(1/n_repfolds+1/(n_folds-1)))
 	else:
-		std_error = 1e100
+		std_error_aucroc = 1e100
+		std_error_aucpr = 1e100
 
-	print('Pooling AUC ROC:', pooling_auc)
-	print('Averaging AUC ROC:', averaging_auc)
-	print('Averaging Std Error:', std_error)
-	print('95% Confidence Interval: [', averaging_auc - c*std_error,",", averaging_auc+c*std_error, "]")
+	print('Pooling AUC ROC:', pooling_aucroc)
+	print('Averaging AUC ROC:', averaging_aucroc)
+	print('Averaging Std Error:', std_error_aucroc)
+	print('95% Confidence Interval: [', averaging_aucroc - c*std_error_aucroc,",", averaging_aucroc+c*std_error_aucroc, "]")
+	print('Pooling PR ROC:', pooling_aucpr)
+	print('Averaging PR ROC:', averaging_aucpr)
+	print('Averaging Std Error:', std_error_aucpr)
+	print('95% Confidence Interval: [', averaging_aucpr - c*std_error_aucpr,",", averaging_aucroc+c*std_error_aucpr, "]")
 
-	results_dict = {"pool_auc": pooling_auc,
-					"avg_auc": averaging_auc,
-					"avg_auc_stderr": std_error,
-					"95ci_low": averaging_auc - c*std_error,
-					"95ci_high": averaging_auc+c*std_error}
+	results_dict = {"pool_aucroc": pooling_aucroc,
+					"avg_aucroc": averaging_aucroc,
+					"avg_aucroc_stderr": std_error_aucroc,
+					"aucroc_95ci_low": averaging_aucroc - c*std_error_aucroc,
+					"aucroc_95ci_high": averaging_aucroc+c*std_error_aucroc,
+					"pool_aucpr": pooling_aucpr,
+					"avg_aucpr": averaging_aucpr,
+					"avg_aucpr_stderr": std_error_aucpr,
+					"aucpr_95ci_low": averaging_aucpr - c*std_error_aucpr,
+					"aucpr_95ci_high": averaging_aucpr+c*std_error_aucpr}
 
 	return (unfolded_pred_prob,unfolded_true_label, results_dict)
 

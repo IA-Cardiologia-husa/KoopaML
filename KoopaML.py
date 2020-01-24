@@ -9,7 +9,7 @@ import luigi
 import contextlib
 
 from utils.crossvalidation import predict_kfold_ML, predict_kfold_RS, predict_filter_kfold_ML, predict_filter_kfold_RS,predict_groupkfold_ML, predict_groupkfold_RS, external_validation, external_validation_RS
-from utils.analysis import AUC_stderr_classic,AUC_stderr_hanley, group_files_analyze, mdaeli5_analysis, mdaeli5_analysis_ext, plot_all_aucs, paired_ttest, cutoff_threshold_maxfbeta, cutoff_threshold_single, cutoff_threshold_double, cutoff_threshold_triple,cutoff_threshold_accuracy, all_thresholds, create_descriptive_xls
+from utils.analysis import AUC_stderr_classic,AUC_stderr_hanley, group_files_analyze, mdaeli5_analysis, mdaeli5_analysis_ext, plot_all_rocs, plot_all_prs, paired_ttest, cutoff_threshold_maxfbeta, cutoff_threshold_single, cutoff_threshold_double, cutoff_threshold_triple,cutoff_threshold_accuracy, all_thresholds, create_descriptive_xls
 from user_data_utils import load_database, clean_database, process_database, fillna_database, preprocess_filtered_database
 from user_external_data_utils import load_external_database, clean_external_database, process_external_database, fillna_external_database, preprocess_filtered_external_database
 from user_MLmodels_info import ML_info
@@ -592,7 +592,8 @@ class GraphsWF(luigi.Task):
 	def run(self):
 
 		# First we plot every ML model and risk score
-		plot_all_aucs(task_requires=self.input(), fig_path= self.output()["plot_all"].path,title=WF_info[self.wf_name]["formal_title"])
+		plot_all_rocs(task_requires=self.input(), fig_path= self.output()["roc_all"].path,title=WF_info[self.wf_name]["formal_title"])
+		plot_all_prs(task_requires=self.input(), fig_path= self.output()["pr_all"].path,title=WF_info[self.wf_name]["formal_title"])
 
 		# Second we open the results dictionary for every ML model and Risk Score in the workflow wf_name to determine
 		# the best ML model and the best risk score
@@ -605,7 +606,7 @@ class GraphsWF(luigi.Task):
 			for i in self.list_ML:
 				with open(self.input()[i]["auc_results"].path, 'rb') as f:
 					results_dict=pickle.load(f)
-					auc_ml[i]=results_dict["avg_auc"]
+					auc_ml[i]=results_dict["avg_aucroc"]
 
 			sorted_ml = sorted(auc_ml.keys(), key=lambda x: auc_ml[x], reverse=True)
 
@@ -613,7 +614,7 @@ class GraphsWF(luigi.Task):
 			for i in self.list_RS:
 				with open(self.input()[i]["auc_results"].path, 'rb') as f:
 						results_dict=pickle.load(f)
-						auc_rs[i]=results_dict["avg_auc"]
+						auc_rs[i]=results_dict["avg_aucroc"]
 
 			sorted_rs = sorted(auc_rs.keys(), key=lambda x: auc_rs[x], reverse=True)
 
@@ -624,7 +625,8 @@ class GraphsWF(luigi.Task):
 			for rs in sorted_rs[0:self.n_best_RS]:
 				tasks[rs]=self.input()[rs]
 
-			plot_all_aucs(task_requires=tasks , fig_path= self.output()["plot_best"].path,title=WF_info[self.wf_name]["formal_title"])
+			plot_all_rocs(task_requires=tasks , fig_path= self.output()["roc_best"].path,title=WF_info[self.wf_name]["formal_title"])
+			plot_all_prs(task_requires=tasks , fig_path= self.output()["pr_best"].path,title=WF_info[self.wf_name]["formal_title"])
 
 	def output(self):
 		try:
@@ -636,10 +638,13 @@ class GraphsWF(luigi.Task):
 		else:
 			prefix = ''
 		if((len(self.list_RS) > 0) & (len(self.list_ML) > 0)):
-			return {"plot_all": luigi.LocalTarget(os.path.join(report_path,self.wf_name, f"AllModelsPlot_{prefix}{self.wf_name}.png")),
-					"plot_best": luigi.LocalTarget(os.path.join(report_path,self.wf_name, f"BestModelsPlot_{prefix}{self.wf_name}.png"))}
+			return {"roc_all": luigi.LocalTarget(os.path.join(report_path,self.wf_name, f"AllModelsROC_{prefix}{self.wf_name}.png")),
+					"roc_best": luigi.LocalTarget(os.path.join(report_path,self.wf_name, f"BestModelsROC_{prefix}{self.wf_name}.png")),
+					"pr_all": luigi.LocalTarget(os.path.join(report_path,self.wf_name, f"AllModelsPR_{prefix}{self.wf_name}.png")),
+					"pr_best": luigi.LocalTarget(os.path.join(report_path,self.wf_name, f"BestModelsPR_{prefix}{self.wf_name}.png"))}
 		else:
-			return {"plot_all": luigi.LocalTarget(os.path.join(report_path,self.wf_name, f"AllModelsPlot_{prefix}{self.wf_name}.png"))}
+			return {"roc_all": luigi.LocalTarget(os.path.join(report_path,self.wf_name, f"AllModelsROC_{prefix}{self.wf_name}.png")),
+					"pr_all": luigi.LocalTarget(os.path.join(report_path,self.wf_name, f"AllModelsPR_{prefix}{self.wf_name}.png"))}
 
 
 
@@ -736,7 +741,6 @@ class BestMLModelReport(luigi.Task):
 		for i in self.list_ML:
 			requirements[i] = Evaluate_ML(clf_name = i, wf_name = self.wf_name, ext_val=self.ext_val)
 			requirements[i+'_threshold'] = ThresholdPoints(clf_or_score = i, wf_name = self.wf_name, list_ML = self.list_ML, ext_val=self.ext_val)
-			requirements[i+'_allthresholds'] = AllThresholds(clf_or_score = i, wf_name = self.wf_name, list_ML = self.list_ML, ext_val=self.ext_val)
 			if self.all_ML_importances:
 				requirements[i+'_importances'] = MDAFeatureImportances(clf_name = i, wf_name = self.wf_name, ext_val=self.ext_val)
 		return requirements
@@ -748,7 +752,7 @@ class BestMLModelReport(luigi.Task):
 		for i in self.list_ML:
 			with open(self.input()[i]["auc_results"].path, 'rb') as f:
 				results_dict=pickle.load(f)
-				auc_ml[i]=results_dict["avg_auc"]
+				auc_ml[i]=results_dict["avg_aucroc"]
 
 		best_ml = max(auc_ml.keys(), key=(lambda k: auc_ml[k]))
 
@@ -757,9 +761,12 @@ class BestMLModelReport(luigi.Task):
 
 		with open(self.output().path,'w') as f:
 			f.write(f"Model name: {best_ml}\n")
-			f.write(f"AUC: {best_ml_results_dict['avg_auc']}\n")
-			f.write(f"AUC stderr: {best_ml_results_dict['avg_auc_stderr']}\n")
-			f.write(f"Confidence Interval (95%): {best_ml_results_dict['95ci_low']}-{best_ml_results_dict['95ci_high']}\n")
+			f.write(f"AUC ROC: {best_ml_results_dict['avg_aucroc']}\n")
+			f.write(f"AUC ROC stderr: {best_ml_results_dict['avg_aucroc_stderr']}\n")
+			f.write(f"AUC ROC Confidence Interval (95%): {best_ml_results_dict['aucroc_95ci_low']}-{best_ml_results_dict['aucroc_95ci_high']}\n")
+			f.write(f"AUC PR: {best_ml_results_dict['avg_aucpr']}\n")
+			f.write(f"AUC PR stderr: {best_ml_results_dict['avg_aucpr_stderr']}\n")
+			f.write(f"AUC PR Confidence Interval (95%): {best_ml_results_dict['aucpr_95ci_low']}-{best_ml_results_dict['aucpr_95ci_high']}\n")
 			f.write("\n")
 			with open(self.input()[best_ml+'_threshold'].path, 'r') as f2:
 				for line in f2.readlines():
@@ -806,7 +813,7 @@ class BestRSReport(luigi.Task):
 		for i in self.list_RS:
 			with open(self.input()[i]["auc_results"].path, 'rb') as f:
 				results_dict=pickle.load(f)
-				auc_rs[i]=results_dict["avg_auc"]
+				auc_rs[i]=results_dict["avg_aucroc"]
 
 		best_rs = max(auc_rs.keys(), key=(lambda k: auc_rs[k]))
 
@@ -815,13 +822,16 @@ class BestRSReport(luigi.Task):
 
 		with open(self.output().path,'w') as f:
 			f.write(f"Score name: {RS_info[best_rs]['formal_name']}\n")
-			f.write(f"AUC: {best_rs_results_dict['avg_auc']}\n")
-			f.write(f"AUC stderr: {best_rs_results_dict['avg_auc_stderr']}\n")
-			f.write(f"Confidence Interval Subsampling(95%): {best_rs_results_dict['95ci_low']}- {best_rs_results_dict['95ci_high']}\n")
+			f.write(f"AUC ROC: {best_rs_results_dict['avg_aucroc']}\n")
+			f.write(f"AUC ROC stderr: {best_rs_results_dict['avg_aucroc_stderr']}\n")
+			f.write(f"AUC ROC Confidence Interval Subsampling(95%): {best_rs_results_dict['aucroc_95ci_low']}- {best_rs_results_dict['aucroc_95ci_high']}\n")
 			with open(self.input()[best_rs+'_hanley'].path, 'r') as f2:
 				for line in f2.readlines():
 					f.write(line)
 			f.write("\n")
+			f.write(f"AUC PR: {best_rs_results_dict['avg_aucpr']}\n")
+			f.write(f"AUC PR stderr: {best_rs_results_dict['avg_aucpr_stderr']}\n")
+			f.write(f"AUC PR Confidence Interval Subsampling(95%): {best_rs_results_dict['aucpr_95ci_low']}- {best_rs_results_dict['aucpr_95ci_high']}\n")
 			with open(self.input()[best_rs+'_threshold']['txt'].path, 'r') as f3:
 				for line in f3.readlines():
 					f.write(line)
@@ -1051,6 +1061,8 @@ class AllTasks(luigi.Task):
 			yield GraphsWF(wf_name = it_wf_name, list_ML=self.list_ML, list_RS=self.list_RS)
 			if(len(self.list_ML) > 0):
 				yield BestMLModelReport(wf_name = it_wf_name, list_ML=self.list_ML)
+				# for it_ml_name in self.list_ml:
+					# yield AllThresholds(clf_or_score = it_ml_name, wf_name = it_wf_name, list_ML = self.list_ML, ext_val='No')
 			if(len(self.list_RS) > 0):
 				yield BestRSReport(wf_name = it_wf_name, list_RS=self.list_RS)
 			yield AllModels_PairedTTest(wf_name = it_wf_name, list_ML=self.list_ML, list_RS=self.list_RS)
@@ -1059,8 +1071,12 @@ class AllTasks(luigi.Task):
 			if(WF_info[it_wf_name]['external_validation'] == 'Yes'):
 				yield DescriptiveXLS(wf_name = it_wf_name, ext_val = 'Yes')
 				yield GraphsWF(wf_name = it_wf_name, list_ML=self.list_ML, list_RS=self.list_RS, ext_val = 'Yes')
-				yield BestMLModelReport(wf_name = it_wf_name, list_ML=self.list_ML, ext_val = 'Yes')
-				yield BestRSReport(wf_name = it_wf_name, list_RS=self.list_RS, ext_val = 'Yes')
+				if(len(self.list_ML) > 0):
+					yield BestMLModelReport(wf_name = it_wf_name, list_ML=self.list_ML, ext_val = 'Yes')
+					# for it_ml_name in self.list_ml:
+						# yield AllThresholds(clf_or_score = it_ml_name, wf_name = it_wf_name, list_ML = self.list_ML, ext_val='Yes')
+				if(len(self.list_RS) > 0):
+					yield BestRSReport(wf_name = it_wf_name, list_RS=self.list_RS, ext_val = 'Yes')
 				yield AllModels_PairedTTest(wf_name = it_wf_name, list_ML=self.list_ML, list_RS=self.list_RS,ext_val = 'Yes')
 
 	def run(self):
