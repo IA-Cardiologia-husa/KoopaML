@@ -302,7 +302,7 @@ def plot_all_rocs(task_requires, fig_path,title):
 	plt.legend(loc="lower right", fontsize = 15)
 
 	plt.savefig(fig_path)
-	
+
 def plot_all_prs(task_requires, fig_path,title):
 	plt.figure(figsize=(10,10))
 	plt.xlim([-0.05, 1.05])
@@ -363,10 +363,12 @@ def group_files_analyze(task_requires, clf_name):
 			n_repfolds+=1
 			true_label = np.array(true_label)
 			pred_prob = np.array(pred_prob)
-			aucroc_score+=sk_m.roc_auc_score(true_label[~np.isnan(true_label)].astype(bool),pred_prob[~np.isnan(true_label)])
-			aucroc_score2+=aucroc_score**2
-			aucpr_score+=sk_m.average_precision_score(true_label[~np.isnan(true_label)].astype(bool),pred_prob[~np.isnan(true_label)])
-			aucpr_score2+=aucpr_score**2
+			repfold_aucroc = sk_m.roc_auc_score(true_label[~np.isnan(true_label)].astype(bool),pred_prob[~np.isnan(true_label)])
+			aucroc_score+=repfold_aucroc
+			aucroc_score2+=repfold_aucroc**2
+			repfold_aucpr = sk_m.average_precision_score(true_label[~np.isnan(true_label)].astype(bool),pred_prob[~np.isnan(true_label)])
+			aucpr_score+=repfold_aucpr
+			aucpr_score2+=repfold_aucpr**2
 			unfolded_true_label+=list(true_label)
 			unfolded_pred_prob+=list(pred_prob)
 
@@ -378,11 +380,11 @@ def group_files_analyze(task_requires, clf_name):
 	pooling_aucroc = sk_m.roc_auc_score(unfolded_true_label[~np.isnan(unfolded_true_label)].astype(bool),unfolded_pred_prob[~np.isnan(unfolded_true_label)])
 	averaging_aucroc = aucroc_score/n_repfolds
 	averaging_sample_variance_aucroc = (aucroc_score2-aucroc_score**2/n_repfolds)/(n_repfolds-1)
-	
+
 	pooling_aucpr = sk_m.average_precision_score(unfolded_true_label[~np.isnan(unfolded_true_label)].astype(bool),unfolded_pred_prob[~np.isnan(unfolded_true_label)])
 	averaging_aucpr = aucpr_score/n_repfolds
 	averaging_sample_variance_aucpr = (aucpr_score2-aucpr_score**2/n_repfolds)/(n_repfolds-1)
-	
+
 	critical_pvalue=0.05
 	c = sc_st.t.ppf(1-critical_pvalue/2, df= n_repfolds-1)
 
@@ -400,7 +402,7 @@ def group_files_analyze(task_requires, clf_name):
 	print('Pooling PR ROC:', pooling_aucpr)
 	print('Averaging PR ROC:', averaging_aucpr)
 	print('Averaging Std Error:', std_error_aucpr)
-	print('95% Confidence Interval: [', averaging_aucpr - c*std_error_aucpr,",", averaging_aucroc+c*std_error_aucpr, "]")
+	print('95% Confidence Interval: [', averaging_aucpr - c*std_error_aucpr,",", averaging_aucpr+c*std_error_aucpr, "]")
 
 	results_dict = {"pool_aucroc": pooling_aucroc,
 					"avg_aucroc": averaging_aucroc,
