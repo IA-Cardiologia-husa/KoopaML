@@ -11,4 +11,15 @@
 #						 'formal_name': 'CHA2DS2-VASc'
 # 						 'sign': -1}
 
+# RS_info['CHADSVASC'] = {'feature_oddratio':{'ICC':1,
+# 											'HTA':1,
+# 											'age75':1,
+# 											'DM':1,
+# 											'ICTUS/AIT PREVIO':1,
+# 											'Age65':1,
+# 											'Genero'-1:
+# 											},
+# 						'formal_name': 'CHA2DS2-VASc',
+# 						'refit_oddratio':'No'}
+
 RS_info = {}

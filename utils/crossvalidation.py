@@ -3,17 +3,22 @@ import pandas as pd
 import sklearn.model_selection as sk_ms
 import sklearn.utils as sk_u
 import sklearn.calibration as sk_cal
+import sklearn.linear_model as sk_lm
 import time
 
 from .stratifiedgroupkfold import StratifiedGroupKFold
 
-def external_validation_RS(external_data, label, score_label, sign):
+def external_validation_RS(external_data, label, score_label, feature_oddratio):
 
+	X = external_data
 	Y = external_data.loc[:,[label]]
-	S = sign*external_data.loc[:,[score_label]]
+
+	Y_prob = pd.Series(0, index=X.index)
+	for feat in feature_oddratio.keys():
+		Y_prob += feature_oddratio[feat]*X.loc[:,feat]
 
 	#Saved as a list of lists because of compatibility with predict_kfold
-	tl_pp_dict={"true_label":[list(Y.values.flat)], "pred_prob":[list(S.values.flat)]}
+	tl_pp_dict={"true_label":[list(Y.values.flat)], "pred_prob":[list(Y_prob.values.flat)]}
 
 	return tl_pp_dict
 
@@ -69,7 +74,7 @@ def predict_filter_kfold_ML(data, label, features, filter_function, clf, seed, c
 
 	return tl_pp_dict
 
-def predict_filter_kfold_RS(data, label, features, filter_function, sign, score_name, seed, cvfolds):
+def predict_filter_kfold_RS(data, label, features, filter_function, feature_oddratio_dict, score_name, seed, cvfolds):
 
 	kf = sk_ms.KFold(cvfolds, random_state=seed, shuffle=True)
 
@@ -88,7 +93,9 @@ def predict_filter_kfold_RS(data, label, features, filter_function, sign, score_
 		X_test = data_test
 		Y_test = data_test.loc[:,[label]]
 
-		Y_prob = sign*X_test.loc[:,score_name]
+		Y_prob = pd.Series(0, index=X_test.index)
+		for feat in feature_oddratio.keys():
+			Y_prob += feature_oddratio[feat]*X_test.loc[:,feat]
 
 		predicted_probability.append(Y_prob)
 		true_label.append(list(Y_test.values.flat))
@@ -139,7 +146,7 @@ def predict_kfold_ML(data, label, features, cv_type, clf, seed, cvfolds):
 	return tl_pp_dict
 
 
-def predict_kfold_RS(data, label, features, cv_type, sign, score_name,seed, cvfolds):
+def predict_kfold_RS(data, label, features, cv_type, sign, feature_oddratio_dict, score_name,seed, cvfolds):
 
 	X = data.loc[:, :]
 	Y = data.loc[:,[label]].astype(bool)
@@ -157,7 +164,9 @@ def predict_kfold_RS(data, label, features, cv_type, sign, score_name,seed, cvfo
 	for train_index, test_index in skf.split(X,Y):
 		X_train, X_test = X.iloc[train_index], X.iloc[test_index]
 		Y_train, Y_test = Y.iloc[train_index], Y.iloc[test_index]
-		Y_prob = sign*X_test.loc[:,score_name]
+		Y_prob = pd.Series(0, index=X_test.index)
+		for feat in feature_oddratio.keys():
+			Y_prob += feature_oddratio[feat]*X_test.loc[:,feat]
 		predicted_probability.append(list(Y_prob.values.flat))
 		true_label.append(list(Y_test.values.flat))
 
@@ -235,10 +244,62 @@ def predict_groupkfold_RS(data, label, features, group_label, cv_type, sign, sco
 		X_train, X_test = X.iloc[train_index], X.iloc[test_index]
 		Y_train, Y_test = Y.iloc[train_index], Y.iloc[test_index]
 
-		Y_prob = sign*X_test.loc[:,score_name]
+		Y_prob = pd.Series(0, index=X_test.index)
+		for feat in feature_oddratio.keys():
+			Y_prob += feature_oddratio[feat]*X_test.loc[:,feat]
 		predicted_probability.append(list(Y_prob.values.flat))
 		true_label.append(list(Y_test.values.flat))
 
 	tl_pp_dict={"true_label":true_label, "pred_prob":predicted_probability}
 
 	return tl_pp_dict
+
+def predict_kfold_refitted_RS(data, label, features, cv_type, feature_oddratio_dict, score_name,seed, cvfolds):
+
+	X = data.loc[:, :]
+	Y = data.loc[:,[label]].astype(bool)
+
+	if(cv_type == 'stratifiedkfold'):
+		skf = sk_ms.StratifiedKFold(cvfolds, random_state=seed, shuffle=True)
+	elif(cv_type == 'kfold'):
+		skf = sk_ms.KFold(cvfolds, random_state=seed, shuffle=True)
+	else:
+		raise('incompatible crossvalidation type')
+
+	predicted_probability = []
+	true_label = []
+
+	lr = sk_lm.LogisticRegression(penalty='none')
+
+	for train_index, test_index in skf.split(X,Y):
+		X_train, X_test = X.iloc[train_index], X.iloc[test_index]
+		Y_train, Y_test = Y.iloc[train_index], Y.iloc[test_index]
+		X_train = X_train.loc[:,list(feature_oddratio.keys())]
+		lr.fit(X_train, Y_train)
+		Y_prob = pd.Series(0, index=X_test.index)
+		n_feat=0
+		for feat in feature_oddratio.keys():
+			Y_prob += lr.coef_[0,n_feat]*X_test.loc[:,feat]
+			n_feat+=1
+		predicted_probability.append(list(Y_prob.values.flat))
+		true_label.append(list(Y_test.values.flat))
+
+	tl_pp_dict={"true_label":true_label, "pred_prob":predicted_probability}
+
+	return tl_pp_dict
+
+def refitted_oddratios(data, label, feature_oddratio_dict, score_name):
+	X = data.loc[:, :]
+	Y = data.loc[:,[label]].astype(bool)
+
+	lr = sk_lm.LogisticRegression(penalty='none')
+	lr.fit(X, Y)
+
+	refitted_or = {}
+
+	n_feat=0
+	for feat in feature_oddratio.keys():
+		refitted_or[feat] = lr.coef_[0,n_feat]
+		n_feat+=1
+
+	return refitted_or

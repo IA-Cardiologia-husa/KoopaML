@@ -211,9 +211,38 @@ class ExternalValidationRS(luigi.Task):
 		df_input = pd.read_pickle(self.input()["pickle"].path)
 		label = WF_info[self.wf_name]["label_name"]
 		score_label = RS_info[self.score_name]["label_name"]
-		sign = RS_info[self.score_name]["sign"]
+		feature_oddratio_dict = RS_info[self.score_name]["feature_oddratio"]
 
-		tl_pp_dict = external_validation_RS(df_input, label, score_label, sign)
+		tl_pp_dict = external_validation_RS(df_input, label, score_label, feature_oddratio)
+
+		with open(self.output().path, 'wb') as f:
+			# Pickle the 'data' dictionary using the highest protocol available.
+			pickle.dump(tl_pp_dict, f, pickle.HIGHEST_PROTOCOL)
+
+	def output(self):
+		try:
+			os.makedirs(os.path.join(tmp_path,self.__class__.__name__))
+		except:
+			pass
+		return luigi.LocalTarget(os.path.join(tmp_path,self.__class__.__name__,f"ExternalValidation_PredProb_{self.wf_name}_{self.score_name}.dict"))
+
+class ExternalValidationRefittedRS(luigi.Task):
+	score_name = luigi.Parameter()
+	wf_name = luigi.Parameter()
+
+	def requires(self):
+		return {'df': FilterPreprocessExternalDatabase(self.wf_name),
+				'feature_oddratio': FinalRefittedRSAndOddratios(self.wf_name, self.score_name)}
+
+	def run(self):
+		df_input = pd.read_pickle(self.input()['df']["pickle"].path)
+		label = WF_info[self.wf_name]["label_name"]
+		score_label = RS_info[self.score_name]["label_name"]
+		with open(self.input()["feature_oddratio"].path, 'rb') as f:
+			feature_oddratio_dict=pickle.load(f)
+
+
+		tl_pp_dict = external_validation_RS(df_input, label, score_label, feature_oddratio)
 
 		with open(self.output().path, 'wb') as f:
 			# Pickle the 'data' dictionary using the highest protocol available.
@@ -293,19 +322,20 @@ class RiskScore_KFold(luigi.Task):
 				df_input = pd.read_pickle(self.input()["unfiltered_data"]["pickle"].path)
 				df_filtered = pd.read_pickle(self.input()["data"]["pickle"].path)
 				label = WF_info[self.wf_name]["label_name"]
+				filter_function = WF_info[self.wf_name]["filter_function"]
 				features = WF_info[self.wf_name]["feature_list"]
 				group_label = WF_info[self.wf_name]["group_label"]
 				cv_type = WF_info[self.wf_name]["validation_type"]
 				folds = WF_info[self.wf_name]["cv_folds"]
-				sign = RS_info[self.score_name]["sign"]
+				feature_oddratio_dict = RS_info[self.score_name]["feature_oddratio"]
 				RS_name = RS_info[self.score_name]["label_name"]
 
 				if ((cv_type == 'kfold') or (cv_type=='stratifiedkfold')):
-					tl_pp_dict = predict_kfold_RS(df_filtered, label, features, sign, RS_name, self.seed, folds)
+					tl_pp_dict = predict_kfold_RS(df_filtered, label, features, feature_oddratio_dict, RS_name, self.seed, folds)
 				elif ((cv_type == 'groupkfold') or (cv_type=='stratifiedgroupkfold')):
-					tl_pp_dict = predict_groupkfold_RS(df_filtered, label, features, group_label, cv_type, sign, RS_name, self.seed, folds)
+					tl_pp_dict = predict_groupkfold_RS(df_filtered, label, features, group_label, cv_type, feature_oddratio_dict, RS_name, self.seed, folds)
 				elif (cv_type == 'unfilteredkfold'):
-					tl_pp_dict = predict_filter_kfold_RS(df_input, label, features, filter_function, sign, RS_name, self.seed, folds)
+					tl_pp_dict = predict_filter_kfold_RS(df_input, label, features, filter_function, feature_oddratio_dict, RS_name, self.seed, folds)
 				else:
 					raise('cv_type not recognized')
 
@@ -316,10 +346,58 @@ class RiskScore_KFold(luigi.Task):
 
 	def output(self):
 		try:
-			os.makedirs(os.path.join(tmp_path,self.__class__.__name__))
+			os.makedirs(os.path.join(tmp_path,self.__class__.__name__, self.wf_name, self.score_name))
 		except:
 			pass
-		return luigi.LocalTarget(os.path.join(tmp_path,self.__class__.__name__, f"TrueLabel_PredProb_{self.wf_name}_{self.score_name}_{self.seed}.dict"))
+		return luigi.LocalTarget(os.path.join(tmp_path,self.__class__.__name__, self.wf_name, self.score_name, f"TrueLabel_PredProb_{self.wf_name}_{self.score_name}_{self.seed}.dict"))
+
+class RefittedRiskScore_KFold(luigi.Task):
+	seed = luigi.IntParameter()
+	score_name = luigi.Parameter()
+	wf_name = luigi.Parameter()
+
+	def requires(self):
+		return {'data':FilterPreprocessDatabase(self.wf_name),
+				'unfiltered_data': FillnaDatabase()}
+
+	def run(self):
+		try:
+			os.makedirs(os.path.join(log_path,self.__class__.__name__))
+		except:
+			pass
+		with open(os.path.join(log_path,self.__class__.__name__,f"Log_{self.wf_name}_{self.score_name}_{self.seed}.txt"),'w') as f:
+			with contextlib.redirect_stdout(f):
+				df_input = pd.read_pickle(self.input()["unfiltered_data"]["pickle"].path)
+				df_filtered = pd.read_pickle(self.input()["data"]["pickle"].path)
+				label = WF_info[self.wf_name]["label_name"]
+				filter_function = WF_info[self.wf_name]["filter_function"]
+				features = WF_info[self.wf_name]["feature_list"]
+				group_label = WF_info[self.wf_name]["group_label"]
+				cv_type = WF_info[self.wf_name]["validation_type"]
+				folds = WF_info[self.wf_name]["cv_folds"]
+				feature_oddratio_dict = RS_info[self.score_name]["feature_oddratio"]
+				RS_name = RS_info[self.score_name]["label_name"]
+
+				if ((cv_type == 'kfold') or (cv_type=='stratifiedkfold')):
+					tl_pp_dict = predict_kfold_refitted_RS(df_filtered, label, features, feature_oddratio_dict, RS_name, self.seed, folds)
+				elif ((cv_type == 'groupkfold') or (cv_type=='stratifiedgroupkfold')):
+					tl_pp_dict = predict_groupkfold_refitted_RS(df_filtered, label, features, group_label, cv_type, feature_oddratio_dict, RS_name, self.seed, folds)
+				elif (cv_type == 'unfilteredkfold'):
+					tl_pp_dict = predict_filter_kfold_refitted_RS(df_input, label, features, filter_function, feature_oddratio_dict, RS_name, self.seed, folds)
+				else:
+					raise('cv_type not recognized')
+
+
+		with open(self.output().path, 'wb') as f:
+			# Pickle the 'data' dictionary using the highest protocol available.
+			pickle.dump(tl_pp_dict, f, pickle.HIGHEST_PROTOCOL)
+
+	def output(self):
+		try:
+			os.makedirs(os.path.join(tmp_path,self.__class__.__name__, self.wf_name, f'REFITTED_{self.score_name}'))
+		except:
+			pass
+		return luigi.LocalTarget(os.path.join(tmp_path,self.__class__.__name__, self.wf_name, f'REFITTED_{self.score_name}', f"TrueLabel_PredProb_{self.wf_name}_REFITTED_{self.score_name}_{self.seed}.dict"))
 
 
 class Evaluate_ML(luigi.Task):
@@ -374,10 +452,20 @@ class EvaluateRiskScore(luigi.Task):
 
 	def requires(self):
 		if self.ext_val == 'Yes':
-			yield ExternalValidationRS(wf_name=self.wf_name,score_name=self.score_name)
+			if(RS_info[score_name]['refit_or'] == 'No'):
+				yield ExternalValidationRS(wf_name=self.wf_name,score_name=self.score_name)
+			elif(RS_info[score_name]['refit_or'] == 'Yes'):
+				yield ExternalValidationRefittedRS(wf_name=self.wf_name, seed=i,score_name=self.score_name)
+			else:
+				raise(f"invalid 'refit_or' value in score {score_name}")
 		else:
 			for i in range(1,WF_info[self.wf_name]['cv_repetitions']+1):
-				yield RiskScore_KFold(wf_name=self.wf_name, seed=i,score_name=self.score_name)
+				if(RS_info[score_name]['refit_or'] == 'No'):
+					yield RiskScore_KFold(wf_name=self.wf_name, seed=i,score_oddratio=self.score_name)
+				elif(RS_info[score_name]['refit_or'] == 'Yes'):
+					yield RefittedRiskScore_KFold(wf_name=self.wf_name, seed=i,score_name=self.score_name)
+				else:
+					raise(f"invalid 'refit_or' value in score {score_name}")
 
 	def run(self):
 		try:
@@ -527,10 +615,42 @@ class FinalModelAndHyperparameterResults(luigi.Task):
 
 	def output(self):
 		try:
-			os.makedirs(os.path.join(model_path,self.wf_name))
+			os.makedirs(os.path.join(model_path,self.wf_name, self.clf_name))
 		except:
 			pass
-		return luigi.LocalTarget(os.path.join(model_path,self.wf_name,f"ML_model_{self.wf_name}_{self.clf_name}.pickle"))
+		return luigi.LocalTarget(os.path.join(model_path,self.wf_name,self.clf_name,f"ML_model_{self.wf_name}_{self.clf_name}.pickle"))
+
+class FinalRefittedRSAndOddratios(luigi.Task):
+	#jgkñjfsdñajfasñdjfñasjkfdasjdfañksdfjañsdjfkafsñ
+	score_name = luigi.Parameter()
+	wf_name = luigi.Parameter()
+
+	def requires(self):
+		return FilterPreprocessDatabase(self.wf_name)
+
+	def run(self):
+		df_filtered = pd.read_pickle(self.input()["pickle"].path)
+		label = WF_info[self.wf_name]["label_name"]
+		features = WF_info[self.wf_name]["feature_list"]
+		feature_oddratio_dict = RS_info[self.score_name]["feature_oddratio"]
+
+		refitted_or =  refitted_oddratios(df_filtered, label, feature_oddratio_dict, self.score_name):
+
+		with open(self.output()['pickle'].path,'wb') as f:
+			pickle.dump(refitted_or, f, pickle.HIGHEST_PROTOCOL)
+
+		with open(self.output()['txt'].path,'w') as f:
+			for feat in refitted_or.keys():
+				f.write(f'{feat}: {refitted_or[feat]\n}')
+
+	def output(self):
+		try:
+			os.makedirs(os.path.join(model_path,self.wf_name,self.score_name))
+		except:
+			pass
+		return {'pickle': luigi.LocalTarget(os.path.join(model_path,self.wf_name,self.score_name,f"Refitted_Oddratios_{self.wf_name}_{self.score_name}.pickle")),
+				'txt': luigi.LocalTarget(os.path.join(model_path,self.wf_name,self.score_name,f"Refitted_Oddratios_{self.wf_name}_{self.score_name}.txt"))}
+
 
 
 class AllModels_PairedTTest(luigi.Task):
@@ -800,17 +920,18 @@ class BestRSReport(luigi.Task):
 
 	def requires(self):
 		requirements = {}
-		for i in self.list_RS:
-			requirements[i] = EvaluateRiskScore(score_name = i, wf_name = self.wf_name, ext_val = self.ext_val)
-			requirements[i+'_threshold'] = AllThresholds(clf_or_score = i, wf_name = self.wf_name, list_RS=self.list_RS, ext_val = self.ext_val)
-			requirements[i+'_hanley'] = ConfidenceIntervalHanleyRS(score_name = i, wf_name = self.wf_name, ext_val = self.ext_val)
+		for rs in self.list_RS:
+			requirements[rs] = EvaluateRiskScore(score_name = rs, wf_name = self.wf_name, ext_val = self.ext_val)
+			requirements[rs+'_threshold'] = AllThresholds(clf_or_score = rs, wf_name = self.wf_name, list_RS=self.list_RS, ext_val = self.ext_val)
+			if (RS_info[rs]['refit_or']=='No'):
+				requirements[rs+'_hanley'] = ConfidenceIntervalHanleyRS(score_name = rs, wf_name = self.wf_name, ext_val = self.ext_val)
 		return requirements
 
 	def run(self):
 		# First we open the results dictionary for every ML model in the workflow wf_name to determine
 		# the best risk score
 		auc_rs = {}
-		for i in self.list_RS:
+		for i in self.list_RS+self.refitted_list:
 			with open(self.input()[i]["auc_results"].path, 'rb') as f:
 				results_dict=pickle.load(f)
 				auc_rs[i]=results_dict["avg_aucroc"]
@@ -825,9 +946,10 @@ class BestRSReport(luigi.Task):
 			f.write(f"AUC ROC: {best_rs_results_dict['avg_aucroc']}\n")
 			f.write(f"AUC ROC stderr: {best_rs_results_dict['avg_aucroc_stderr']}\n")
 			f.write(f"AUC ROC Confidence Interval Subsampling(95%): {best_rs_results_dict['aucroc_95ci_low']}- {best_rs_results_dict['aucroc_95ci_high']}\n")
-			with open(self.input()[best_rs+'_hanley'].path, 'r') as f2:
-				for line in f2.readlines():
-					f.write(line)
+			if (RS_info[best_rs]['refitted_or'] == 'No'):
+				with open(self.input()[best_rs+'_hanley'].path, 'r') as f2:
+					for line in f2.readlines():
+						f.write(line)
 			f.write("\n")
 			f.write(f"AUC PR: {best_rs_results_dict['avg_aucpr']}\n")
 			f.write(f"AUC PR stderr: {best_rs_results_dict['avg_aucpr_stderr']}\n")
@@ -929,6 +1051,7 @@ class AllThresholds(luigi.Task):
 		elif self.ext_val == 'Yes':
 			return {'txt': luigi.LocalTarget(os.path.join(tmp_path,self.__class__.__name__, f"Thresholds_{self.wf_name}_{self.clf_or_score}_EXT.txt")),
 					'df': luigi.LocalTarget(os.path.join(tmp_path,self.__class__.__name__, f"Thresholds_{self.wf_name}_{self.clf_or_score}_EXT.csv"))}
+
 class OnlyGraphs(luigi.Task):
 
 	list_ML = luigi.ListParameter(default=list(ML_info.keys()))
