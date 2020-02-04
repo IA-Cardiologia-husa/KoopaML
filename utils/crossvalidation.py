@@ -146,7 +146,7 @@ def predict_kfold_ML(data, label, features, cv_type, clf, seed, cvfolds):
 	return tl_pp_dict
 
 
-def predict_kfold_RS(data, label, features, cv_type, sign, feature_oddratio_dict, score_name,seed, cvfolds):
+def predict_kfold_RS(data, label, features, cv_type,  feature_oddratio_dict, score_name,seed, cvfolds):
 
 	X = data.loc[:, :]
 	Y = data.loc[:,[label]].astype(bool)
@@ -223,7 +223,7 @@ def predict_groupkfold_ML(data, label, features, group_label, cv_type, clf, seed
 
 	return tl_pp_dict
 
-def predict_groupkfold_RS(data, label, features, group_label, cv_type, sign, score_name,seed, cvfolds):
+def predict_groupkfold_RS(data, label, features, group_label, cv_type, feature_oddratio, score_name,seed, cvfolds):
 
 	X = data.loc[:,:]
 	Y = data.loc[:,[label]].astype(bool)
