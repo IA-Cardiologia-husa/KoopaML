@@ -1190,7 +1190,7 @@ class AllTasks(luigi.Task):
 			for it_clf_name in self.list_ML:
 				yield FinalModelAndHyperparameterResults(wf_name = it_wf_name, clf_name = it_clf_name)
 			for it_rs_name in self.list_RS:
-				if(RS_info[it_rs_name]['refit_oddratio']=='Yes'):
+				if(RS_info[it_rs_name]['refit_oddratios']=='Yes'):
 					yield FinalRefittedRSAndOddratios(wf_name = it_wf_name, score_name = it_rs_name)
 			if(WF_info[it_wf_name]['external_validation'] == 'Yes'):
 				yield DescriptiveXLS(wf_name = it_wf_name, ext_val = 'Yes')
