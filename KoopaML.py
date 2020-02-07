@@ -8,10 +8,10 @@ import sklearn.calibration as sk_cal
 import luigi
 import contextlib
 
-from utils.crossvalidation import predict_kfold_ML, predict_kfold_RS, predict_filter_kfold_ML, predict_filter_kfold_RS,predict_groupkfold_ML, predict_groupkfold_RS, external_validation, external_validation_RS
-from utils.analysis import AUC_stderr_classic,AUC_stderr_hanley, group_files_analyze, mdaeli5_analysis, mdaeli5_analysis_ext, plot_all_rocs, plot_all_prs, paired_ttest, cutoff_threshold_maxfbeta, cutoff_threshold_single, cutoff_threshold_double, cutoff_threshold_triple,cutoff_threshold_accuracy, all_thresholds, create_descriptive_xls
-from user_data_utils import load_database, clean_database, process_database, fillna_database, preprocess_filtered_database
-from user_external_data_utils import load_external_database, clean_external_database, process_external_database, fillna_external_database, preprocess_filtered_external_database
+from utils.crossvalidation import *
+from utils.analysis import *
+from user_data_utils import *
+from user_external_data_utils import *
 from user_MLmodels_info import ML_info
 from user_RiskScores_info import RS_info
 from user_Workflow_info import WF_info
@@ -328,14 +328,13 @@ class RiskScore_KFold(luigi.Task):
 				cv_type = WF_info[self.wf_name]["validation_type"]
 				folds = WF_info[self.wf_name]["cv_folds"]
 				feature_oddratio_dict = RS_info[self.score_name]["feature_oddratio"]
-				RS_name = RS_info[self.score_name]["label_name"]
 
 				if ((cv_type == 'kfold') or (cv_type=='stratifiedkfold')):
-					tl_pp_dict = predict_kfold_RS(df_filtered, label, features, feature_oddratio_dict, RS_name, self.seed, folds)
+					tl_pp_dict = predict_kfold_RS(df_filtered, label, features, feature_oddratio_dict, self.seed, folds)
 				elif ((cv_type == 'groupkfold') or (cv_type=='stratifiedgroupkfold')):
-					tl_pp_dict = predict_groupkfold_RS(df_filtered, label, features, group_label, cv_type, feature_oddratio_dict, RS_name, self.seed, folds)
+					tl_pp_dict = predict_groupkfold_RS(df_filtered, label, features, group_label, cv_type, feature_oddratio_dict,  self.seed, folds)
 				elif (cv_type == 'unfilteredkfold'):
-					tl_pp_dict = predict_filter_kfold_RS(df_input, label, features, filter_function, feature_oddratio_dict, RS_name, self.seed, folds)
+					tl_pp_dict = predict_filter_kfold_RS(df_input, label, features, filter_function, feature_oddratio_dict,  self.seed, folds)
 				else:
 					raise('cv_type not recognized')
 
@@ -376,14 +375,13 @@ class RefittedRiskScore_KFold(luigi.Task):
 				cv_type = WF_info[self.wf_name]["validation_type"]
 				folds = WF_info[self.wf_name]["cv_folds"]
 				feature_oddratio_dict = RS_info[self.score_name]["feature_oddratio"]
-				RS_name = RS_info[self.score_name]["label_name"]
 
 				if ((cv_type == 'kfold') or (cv_type=='stratifiedkfold')):
-					tl_pp_dict = predict_kfold_refitted_RS(df_filtered, label, features, feature_oddratio_dict, RS_name, self.seed, folds)
+					tl_pp_dict = predict_kfold_refitted_RS(df_filtered, label, features, feature_oddratio_dict,  self.seed, folds)
 				elif ((cv_type == 'groupkfold') or (cv_type=='stratifiedgroupkfold')):
-					tl_pp_dict = predict_groupkfold_refitted_RS(df_filtered, label, features, group_label, cv_type, feature_oddratio_dict, RS_name, self.seed, folds)
+					tl_pp_dict = predict_groupkfold_refitted_RS(df_filtered, label, features, group_label, cv_type, feature_oddratio_dict, self.seed, folds)
 				elif (cv_type == 'unfilteredkfold'):
-					tl_pp_dict = predict_filter_kfold_refitted_RS(df_input, label, features, filter_function, feature_oddratio_dict, RS_name, self.seed, folds)
+					tl_pp_dict = predict_filter_kfold_refitted_RS(df_input, label, features, filter_function, feature_oddratio_dict,  self.seed, folds)
 				else:
 					raise('cv_type not recognized')
 
@@ -452,17 +450,17 @@ class EvaluateRiskScore(luigi.Task):
 
 	def requires(self):
 		if self.ext_val == 'Yes':
-			if(RS_info[score_name]['refit_or'] == 'No'):
+			if(RS_info[self.score_name]['refit_oddratios'] == 'No'):
 				yield ExternalValidationRS(wf_name=self.wf_name,score_name=self.score_name)
-			elif(RS_info[score_name]['refit_or'] == 'Yes'):
+			elif(RS_info[self.score_name]['refit_oddratios'] == 'Yes'):
 				yield ExternalValidationRefittedRS(wf_name=self.wf_name, seed=i,score_name=self.score_name)
 			else:
 				raise(f"invalid 'refit_or' value in score {score_name}")
 		else:
 			for i in range(1,WF_info[self.wf_name]['cv_repetitions']+1):
-				if(RS_info[score_name]['refit_or'] == 'No'):
-					yield RiskScore_KFold(wf_name=self.wf_name, seed=i,score_oddratio=self.score_name)
-				elif(RS_info[score_name]['refit_or'] == 'Yes'):
+				if(RS_info[self.score_name]['refit_oddratios'] == 'No'):
+					yield RiskScore_KFold(wf_name=self.wf_name, seed=i,score_name=self.score_name)
+				elif(RS_info[self.score_name]['refit_oddratios'] == 'Yes'):
 					yield RefittedRiskScore_KFold(wf_name=self.wf_name, seed=i,score_name=self.score_name)
 				else:
 					raise(f"invalid 'refit_or' value in score {score_name}")
@@ -511,7 +509,7 @@ class ConfidenceIntervalHanleyRS(luigi.Task):
 
 	def run(self):
 		df_input = pd.read_pickle(self.input()["pickle"].path)
-		(auc, stderr) = AUC_stderr_classic(df_input, label_name=WF_info[self.wf_name]["label_name"], score_name=RS_info[self.score_name]["label_name"])
+		(auc, stderr) = AUC_stderr_classic(df_input, label_name=WF_info[self.wf_name]["label_name"], feature_oddratio=RS_info[self.score_name]["feature_oddratio"])
 		ci95_low= auc-1.96*stderr
 		ci95_high= auc+1.96*stderr
 
@@ -519,7 +517,7 @@ class ConfidenceIntervalHanleyRS(luigi.Task):
 		with open(self.output().path,'w') as f:
 			f.write(f"Confidence Interval Upper Bound Classic(95%): {auc} ({ci95_low}-{ci95_high})\n")
 
-			(auc, stderr) = AUC_stderr_hanley(df_input , label_name=WF_info[self.wf_name]["label_name"], score_name=RS_info[self.score_name]["label_name"])
+			(auc, stderr) = AUC_stderr_hanley(df_input , label_name=WF_info[self.wf_name]["label_name"], feature_oddratio=RS_info[self.score_name]["feature_oddratio"])
 			ci95_low= auc-1.96*stderr
 			ci95_high= auc+1.96*stderr
 			f.write(f"Confidence Interval Hanley(95%): {ci95_low}-{ci95_high}\n")
@@ -634,14 +632,14 @@ class FinalRefittedRSAndOddratios(luigi.Task):
 		features = WF_info[self.wf_name]["feature_list"]
 		feature_oddratio_dict = RS_info[self.score_name]["feature_oddratio"]
 
-		refitted_or =  refitted_oddratios(df_filtered, label, feature_oddratio_dict, self.score_name):
+		refitted_or =  refitted_oddratios(df_filtered, label, feature_oddratio_dict)
 
 		with open(self.output()['pickle'].path,'wb') as f:
 			pickle.dump(refitted_or, f, pickle.HIGHEST_PROTOCOL)
 
 		with open(self.output()['txt'].path,'w') as f:
 			for feat in refitted_or.keys():
-				f.write(f'{feat}: {refitted_or[feat]\n}')
+				f.write(f'{feat}: {refitted_or[feat]}\n')
 
 	def output(self):
 		try:
@@ -923,7 +921,7 @@ class BestRSReport(luigi.Task):
 		for rs in self.list_RS:
 			requirements[rs] = EvaluateRiskScore(score_name = rs, wf_name = self.wf_name, ext_val = self.ext_val)
 			requirements[rs+'_threshold'] = AllThresholds(clf_or_score = rs, wf_name = self.wf_name, list_RS=self.list_RS, ext_val = self.ext_val)
-			if (RS_info[rs]['refit_or']=='No'):
+			if (RS_info[rs]['refit_oddratios']=='No'):
 				requirements[rs+'_hanley'] = ConfidenceIntervalHanleyRS(score_name = rs, wf_name = self.wf_name, ext_val = self.ext_val)
 		return requirements
 
@@ -931,7 +929,7 @@ class BestRSReport(luigi.Task):
 		# First we open the results dictionary for every ML model in the workflow wf_name to determine
 		# the best risk score
 		auc_rs = {}
-		for i in self.list_RS+self.refitted_list:
+		for i in self.list_RS:
 			with open(self.input()[i]["auc_results"].path, 'rb') as f:
 				results_dict=pickle.load(f)
 				auc_rs[i]=results_dict["avg_aucroc"]
@@ -946,7 +944,7 @@ class BestRSReport(luigi.Task):
 			f.write(f"AUC ROC: {best_rs_results_dict['avg_aucroc']}\n")
 			f.write(f"AUC ROC stderr: {best_rs_results_dict['avg_aucroc_stderr']}\n")
 			f.write(f"AUC ROC Confidence Interval Subsampling(95%): {best_rs_results_dict['aucroc_95ci_low']}- {best_rs_results_dict['aucroc_95ci_high']}\n")
-			if (RS_info[best_rs]['refitted_or'] == 'No'):
+			if (RS_info[best_rs]['refit_oddratios'] == 'No'):
 				with open(self.input()[best_rs+'_hanley'].path, 'r') as f2:
 					for line in f2.readlines():
 						f.write(line)
@@ -1191,6 +1189,9 @@ class AllTasks(luigi.Task):
 			yield AllModels_PairedTTest(wf_name = it_wf_name, list_ML=self.list_ML, list_RS=self.list_RS)
 			for it_clf_name in self.list_ML:
 				yield FinalModelAndHyperparameterResults(wf_name = it_wf_name, clf_name = it_clf_name)
+			for it_rs_name in self.list_RS:
+				if(RS_info[it_rs_name]['refit_oddratio']=='Yes'):
+					yield FinalRefittedRSAndOddratios(wf_name = it_wf_name, score_name = it_rs_name)
 			if(WF_info[it_wf_name]['external_validation'] == 'Yes'):
 				yield DescriptiveXLS(wf_name = it_wf_name, ext_val = 'Yes')
 				yield GraphsWF(wf_name = it_wf_name, list_ML=self.list_ML, list_RS=self.list_RS, ext_val = 'Yes')

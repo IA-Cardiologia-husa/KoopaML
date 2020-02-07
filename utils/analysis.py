@@ -462,10 +462,14 @@ def paired_ttest(req_name1, req_name2, xlsname, tmp_folder):
 
 	return (averaging_diff, pvalue)
 
-def AUC_stderr_hanley(df, label_name, score_name):
+def AUC_stderr_hanley(df, label_name, feature_oddratio):
 	m = df.loc[df[label_name]==0,label_name].count()
 	n = df.loc[df[label_name]==1,label_name].count()
-	auc = sk_m.roc_auc_score(df[label_name],-df[score_name])
+	Y_prob = pd.Series(0, index=df.index)
+	for feat in feature_oddratio.keys():
+		Y_prob += feature_oddratio[feat]*df.loc[:,feat]
+
+	auc = sk_m.roc_auc_score(df[label_name],Y_prob)
 
 	pxxy = auc/(2-auc)
 	pxyy = 2*auc**2/(1+auc)
@@ -476,11 +480,16 @@ def AUC_stderr_hanley(df, label_name, score_name):
 	return (auc, stderr)
 
 
-def AUC_stderr_classic(df, label_name, score_name):
+def AUC_stderr_classic(df, label_name, feature_oddratio):
 
 	m = df.loc[df[label_name]==0,label_name].count()
 	n = df.loc[df[label_name]==1,label_name].count()
-	auc = sk_m.roc_auc_score(df[label_name],-df[score_name])
+
+	Y_prob = pd.Series(0, index=df.index)
+	for feat in feature_oddratio.keys():
+		Y_prob += feature_oddratio[feat]*df.loc[:,feat]
+
+	auc = sk_m.roc_auc_score(df[label_name],Y_prob)
 
 	variance = auc*(1-auc)/min(m,n)
 	stderr = np.sqrt(variance)

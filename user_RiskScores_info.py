@@ -20,6 +20,6 @@
 # 											'Genero'-1:
 # 											},
 # 						'formal_name': 'CHA2DS2-VASc',
-# 						'refit_oddratio':'No'}
+# 						'refit_oddratios':'No'}
 
 RS_info = {}
