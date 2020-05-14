@@ -619,7 +619,7 @@ class DescriptiveXLS(luigi.Task):
 		label = WF_info[self.wf_name]["label_name"]
 
 		df_output=create_descriptive_xls(df_filtered, self.wf_name, label)
-		writer = pd.ExcelWriter(self.output()["xls"].path, engine='xlsxwriter')
+		writer = pd.ExcelWriter(self.output().path, engine='xlsxwriter')
 		df_output.to_excel(writer, sheet_name='Sheet1')
 		writer.save()
 
