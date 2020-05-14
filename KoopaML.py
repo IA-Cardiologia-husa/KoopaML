@@ -23,13 +23,69 @@ tmp_path = os.path.abspath("intermediate")
 model_path = os.path.abspath("models")
 report_path = os.path.abspath(f"report-{TIMESTRING}")
 
+def setupLog(name):
+	try:
+		os.makedirs(log_path)
+	except:
+		pass
+	logging.basicConfig(
+		level=logging.DEBUG,
+		format='%(asctime)s:%(levelname)s:%(name)s:%(message)s',
+		filename=os.path.join(log_path, f'{name}.log'),
+		filemode='a'
+		)
+
+	stdout_logger = logging.getLogger(f'STDOUT_{name}')
+	sl = StreamToLogger(stdout_logger, logging.INFO)
+	sys.stdout = sl
+
+	stderr_logger = logging.getLogger(f'STDERR_{name}')
+	sl = StreamToLogger(stderr_logger, logging.ERROR)
+	sys.stderr = sl
+
+class StreamToLogger(object):
+	"""
+	Fake file-like stream object that redirects writes to a logger instance.
+	"""
+	def __init__(self, logger, log_level=logging.INFO):
+		self.logger = logger
+		self.log_level = log_level
+		self.linebuf = ''
+
+	def write(self, buf):
+		for line in buf.rstrip().splitlines():
+			self.logger.log(self.log_level, line.rstrip())
+
 #Luigi Tasks
-class CleanDatabase(luigi.Task):
+class LoadDatabase(luigi.Task):
 	def run(self):
+		setupLog(self.__class__.__name__)
 		df_input = load_database()
+		df_input.to_pickle(self.output()["pickle"].path)
+		writer = pd.ExcelWriter(self.output()["xls"].path, engine='xlsxwriter')
+		df_input.to_excel(writer, sheet_name='Sheet1')
+		writer.save()
+
+	def output(self):
+		try:
+			os.makedirs(os.path.join(tmp_path,self.__class__.__name__))
+		except:
+			pass
+		return {"pickle": luigi.LocalTarget(os.path.join(tmp_path,self.__class__.__name__, "df_loaded.pickle")),
+				"xls": luigi.LocalTarget(os.path.join(tmp_path,self.__class__.__name__, "df_loaded.xlsx"))}
+
+class CleanDatabase(luigi.Task):
+	def requires(self):
+		return LoadDatabase()
+	def run(self):
+		setupLog(self.__class__.__name__)
+		df_input = pd.read_pickle(self.input()["pickle"].path)
 		df_output = clean_database(df_input)
 		df_output.to_pickle(self.output()["pickle"].path)
-		df_output.to_excel(self.output()["xls"].path, index=False)
+		writer = pd.ExcelWriter(self.output()["xls"].path, engine='xlsxwriter')
+		df_output.to_excel(writer, sheet_name='Sheet1')
+		writer.save()
+
 
 	def output(self):
 		try:
@@ -44,10 +100,14 @@ class ProcessDatabase(luigi.Task):
 	def requires(self):
 		return CleanDatabase()
 	def run(self):
+		setupLog(self.__class__.__name__)
 		df_input = pd.read_pickle(self.input()["pickle"].path)
 		df_output = process_database(df_input)
 		df_output.to_pickle(self.output()["pickle"].path)
-		df_output.to_excel(self.output()["xls"].path, index=False)
+		writer = pd.ExcelWriter(self.output()["xls"].path, engine='xlsxwriter')
+		df_output.to_excel(writer, sheet_name='Sheet1')
+		writer.save()
+
 
 	def output(self):
 		try:
@@ -62,10 +122,14 @@ class FillnaDatabase(luigi.Task):
 		return ProcessDatabase()
 
 	def run(self):
+		setupLog(self.__class__.__name__)
 		df_input = pd.read_pickle(self.input()["pickle"].path)
 		df_output = fillna_database(df_input)
 		df_output.to_pickle(self.output()["pickle"].path)
-		df_output.to_excel(self.output()["xls"].path, index=False)
+		writer = pd.ExcelWriter(self.output()["xls"].path, engine='xlsxwriter')
+		df_output.to_excel(writer, sheet_name='Sheet1')
+		writer.save()
+
 
 	def output(self):
 		try:
@@ -82,12 +146,16 @@ class FilterPreprocessDatabase(luigi.Task):
 		return FillnaDatabase()
 
 	def run(self):
+		setupLog(self.__class__.__name__)
 		df_input = pd.read_pickle(self.input()["pickle"].path)
 		filter_function = WF_info[self.wf_name]["filter_function"]
 		df_filtered = filter_function(df_input)
 		df_preprocessed = preprocess_filtered_database(df_filtered, self.wf_name)
 		df_preprocessed.to_pickle(self.output()["pickle"].path)
-		df_preprocessed.to_excel(self.output()["xls"].path, index=False)
+		writer = pd.ExcelWriter(self.output()["xls"].path, engine='xlsxwriter')
+		df_preprocessed.to_excel(writer, sheet_name='Sheet1')
+		writer.save()
+
 
 	def output(self):
 		try:
@@ -99,10 +167,14 @@ class FilterPreprocessDatabase(luigi.Task):
 
 class CleanExternalDatabase(luigi.Task):
 	def run(self):
+		setupLog(self.__class__.__name__)
 		df_input = load_external_database()
 		df_output = clean_external_database(df_input)
 		df_output.to_pickle(self.output()["pickle"].path)
-		df_output.to_excel(self.output()["xls"].path, index=False)
+		writer = pd.ExcelWriter(self.output()["xls"].path, engine='xlsxwriter')
+		df_output.to_excel(writer, sheet_name='Sheet1')
+		writer.save()
+
 
 	def output(self):
 		try:
@@ -117,10 +189,14 @@ class ProcessExternalDatabase(luigi.Task):
 	def requires(self):
 		return CleanExternalDatabase()
 	def run(self):
+		setupLog(self.__class__.__name__)
 		df_input = pd.read_pickle(self.input()["pickle"].path)
 		df_output = process_external_database(df_input)
 		df_output.to_pickle(self.output()["pickle"].path)
-		df_output.to_excel(self.output()["xls"].path, index=False)
+		writer = pd.ExcelWriter(self.output()["xls"].path, engine='xlsxwriter')
+		df_output.to_excel(writer, sheet_name='Sheet1')
+		writer.save()
+
 
 	def output(self):
 		try:
@@ -135,10 +211,14 @@ class FillnaExternalDatabase(luigi.Task):
 		return ProcessExternalDatabase()
 
 	def run(self):
+		setupLog(self.__class__.__name__)
 		df_input = pd.read_pickle(self.input()["pickle"].path)
 		df_output = fillna_external_database(df_input)
 		df_output.to_pickle(self.output()["pickle"].path)
-		df_output.to_excel(self.output()["xls"].path, index=False)
+		writer = pd.ExcelWriter(self.output()["xls"].path, engine='xlsxwriter')
+		df_output.to_excel(writer, sheet_name='Sheet1')
+		writer.save()
+
 
 	def output(self):
 		try:
@@ -155,12 +235,16 @@ class FilterPreprocessExternalDatabase(luigi.Task):
 		return FillnaExternalDatabase()
 
 	def run(self):
+		setupLog(self.__class__.__name__)
 		df_input = pd.read_pickle(self.input()["pickle"].path)
 		filter_function = WF_info[self.wf_name]["filter_function"]
 		df_filtered = filter_function(df_input)
 		df_preprocessed = preprocess_filtered_external_database(df_filtered, self.wf_name)
 		df_preprocessed .to_pickle(self.output()["pickle"].path)
-		df_preprocessed .to_excel(self.output()["xls"].path, index=False)
+		writer = pd.ExcelWriter(self.output()["xls"].path, engine='xlsxwriter')
+		df_preprocessed.to_excel(writer, sheet_name='Sheet1')
+		writer.save()
+
 
 	def output(self):
 		try:
@@ -181,6 +265,7 @@ class ExternalValidation(luigi.Task):
 				}
 
 	def run(self):
+		setupLog(self.__class__.__name__)
 		df_input = pd.read_pickle(self.input()["external_data"]["pickle"].path)
 		features = WF_info[self.wf_name]["feature_list"]
 		label = WF_info[self.wf_name]["label_name"]
@@ -208,12 +293,12 @@ class ExternalValidationRS(luigi.Task):
 		return FilterPreprocessExternalDatabase(self.wf_name)
 
 	def run(self):
+		setupLog(self.__class__.__name__)
 		df_input = pd.read_pickle(self.input()["pickle"].path)
 		label = WF_info[self.wf_name]["label_name"]
-		score_label = RS_info[self.score_name]["label_name"]
 		feature_oddratio_dict = RS_info[self.score_name]["feature_oddratio"]
 
-		tl_pp_dict = external_validation_RS(df_input, label, score_label, feature_oddratio)
+		tl_pp_dict = external_validation_RS(df_input, label, feature_oddratio_dict)
 
 		with open(self.output().path, 'wb') as f:
 			# Pickle the 'data' dictionary using the highest protocol available.
@@ -231,18 +316,18 @@ class ExternalValidationRefittedRS(luigi.Task):
 	wf_name = luigi.Parameter()
 
 	def requires(self):
-		return {'df': FilterPreprocessExternalDatabase(self.wf_name),
-				'feature_oddratio': FinalRefittedRSAndOddratios(self.wf_name, self.score_name)}
+		return {'df': FilterPreprocessExternalDatabase(wf_name = self.wf_name),
+				'feature_oddratio': FinalRefittedRSAndOddratios(wf_name = self.wf_name, score_name=self.score_name)}
 
 	def run(self):
+		setupLog(self.__class__.__name__)
 		df_input = pd.read_pickle(self.input()['df']["pickle"].path)
 		label = WF_info[self.wf_name]["label_name"]
-		score_label = RS_info[self.score_name]["label_name"]
 		with open(self.input()["feature_oddratio"].path, 'rb') as f:
 			feature_oddratio_dict=pickle.load(f)
 
 
-		tl_pp_dict = external_validation_RS(df_input, label, score_label, feature_oddratio)
+		tl_pp_dict = external_validation_RS(df_input, label, feature_oddratio)
 
 		with open(self.output().path, 'wb') as f:
 			# Pickle the 'data' dictionary using the highest protocol available.
@@ -266,30 +351,26 @@ class CalculateKFold(luigi.Task):
 				'unfiltered_data': FillnaDatabase()}
 
 	def run(self):
-		try:
-			os.makedirs(os.path.join(log_path,self.__class__.__name__))
-		except:
-			pass
+		setupLog(self.__class__.__name__)
 
-		with open(os.path.join(log_path,self.__class__.__name__,f"Log_{self.wf_name}_{self.clf_name}_{self.seed}.txt"),'w') as f:
-			with contextlib.redirect_stdout(f):
-				df_input = pd.read_pickle(self.input()["unfiltered_data"]["pickle"].path)
-				df_filtered = pd.read_pickle(self.input()["data"]["pickle"].path)
-				features = WF_info[self.wf_name]["feature_list"]
-				label = WF_info[self.wf_name]["label_name"]
-				group_label = WF_info[self.wf_name]["group_label"]
-				cv_type = WF_info[self.wf_name]["validation_type"]
-				folds = WF_info[self.wf_name]["cv_folds"]
-				clf = ML_info[self.clf_name]["clf"]
+		df_input = pd.read_pickle(self.input()["unfiltered_data"]["pickle"].path)
+		df_filtered = pd.read_pickle(self.input()["data"]["pickle"].path)
+		filter_function = WF_info[self.wf_name]["filter_function"]
+		features = WF_info[self.wf_name]["feature_list"]
+		label = WF_info[self.wf_name]["label_name"]
+		group_label = WF_info[self.wf_name]["group_label"]
+		cv_type = WF_info[self.wf_name]["validation_type"]
+		folds = WF_info[self.wf_name]["cv_folds"]
+		clf = ML_info[self.clf_name]["clf"]
 
-				if ((cv_type == 'kfold') or (cv_type=='stratifiedkfold')):
-					tl_pp_dict = predict_kfold_ML(df_filtered, label, features, cv_type, clf, self.seed, folds)
-				elif ((cv_type == 'groupkfold') or (cv_type=='stratifiedgroupkfold')):
-					tl_pp_dict = predict_groupkfold_ML(df_filtered, label, features, group_label, cv_type, clf, self.seed, folds)
-				elif (cv_type == 'unfilteredkfold'):
-					tl_pp_dict = predict_filter_kfold_ML(df_input, label, features, filter_function, clf, self.seed, folds)
-				else:
-					raise('cv_type not recognized')
+		if ((cv_type == 'kfold') or (cv_type=='stratifiedkfold')):
+			tl_pp_dict = predict_kfold_ML(df_filtered, label, features, cv_type, clf, self.seed, folds)
+		elif ((cv_type == 'groupkfold') or (cv_type=='stratifiedgroupkfold')):
+			tl_pp_dict = predict_groupkfold_ML(df_filtered, label, features, group_label, cv_type, clf, self.seed, folds)
+		elif (cv_type == 'unfilteredkfold'):
+			tl_pp_dict = predict_filter_kfold_ML(df_input, label, features, filter_function, clf, self.seed, folds)
+		else:
+			raise('cv_type not recognized')
 
 		with open(self.output().path, 'wb') as f:
 			# Pickle the 'data' dictionary using the highest protocol available.
@@ -313,30 +394,26 @@ class RiskScore_KFold(luigi.Task):
 				'unfiltered_data': FillnaDatabase()}
 
 	def run(self):
-		try:
-			os.makedirs(os.path.join(log_path,self.__class__.__name__))
-		except:
-			pass
-		with open(os.path.join(log_path,self.__class__.__name__,f"Log_{self.wf_name}_{self.score_name}_{self.seed}.txt"),'w') as f:
-			with contextlib.redirect_stdout(f):
-				df_input = pd.read_pickle(self.input()["unfiltered_data"]["pickle"].path)
-				df_filtered = pd.read_pickle(self.input()["data"]["pickle"].path)
-				label = WF_info[self.wf_name]["label_name"]
-				filter_function = WF_info[self.wf_name]["filter_function"]
-				features = WF_info[self.wf_name]["feature_list"]
-				group_label = WF_info[self.wf_name]["group_label"]
-				cv_type = WF_info[self.wf_name]["validation_type"]
-				folds = WF_info[self.wf_name]["cv_folds"]
-				feature_oddratio_dict = RS_info[self.score_name]["feature_oddratio"]
+		setupLog(self.__class__.__name__)
 
-				if ((cv_type == 'kfold') or (cv_type=='stratifiedkfold')):
-					tl_pp_dict = predict_kfold_RS(df_filtered, label, features, feature_oddratio_dict, self.seed, folds)
-				elif ((cv_type == 'groupkfold') or (cv_type=='stratifiedgroupkfold')):
-					tl_pp_dict = predict_groupkfold_RS(df_filtered, label, features, group_label, cv_type, feature_oddratio_dict,  self.seed, folds)
-				elif (cv_type == 'unfilteredkfold'):
-					tl_pp_dict = predict_filter_kfold_RS(df_input, label, features, filter_function, feature_oddratio_dict,  self.seed, folds)
-				else:
-					raise('cv_type not recognized')
+		df_input = pd.read_pickle(self.input()["unfiltered_data"]["pickle"].path)
+		df_filtered = pd.read_pickle(self.input()["data"]["pickle"].path)
+		label = WF_info[self.wf_name]["label_name"]
+		filter_function = WF_info[self.wf_name]["filter_function"]
+		features = WF_info[self.wf_name]["feature_list"]
+		group_label = WF_info[self.wf_name]["group_label"]
+		cv_type = WF_info[self.wf_name]["validation_type"]
+		folds = WF_info[self.wf_name]["cv_folds"]
+		feature_oddratio_dict = RS_info[self.score_name]["feature_oddratio"]
+
+		if ((cv_type == 'kfold') or (cv_type=='stratifiedkfold')):
+			tl_pp_dict = predict_kfold_RS(df_filtered, label, features, feature_oddratio_dict, self.seed, folds)
+		elif ((cv_type == 'groupkfold') or (cv_type=='stratifiedgroupkfold')):
+			tl_pp_dict = predict_groupkfold_RS(df_filtered, label, features, group_label, cv_type, feature_oddratio_dict,  self.seed, folds)
+		elif (cv_type == 'unfilteredkfold'):
+			tl_pp_dict = predict_filter_kfold_RS(df_input, label, features, filter_function, feature_oddratio_dict,  self.seed, folds)
+		else:
+			raise('cv_type not recognized')
 
 
 		with open(self.output().path, 'wb') as f:
@@ -360,30 +437,26 @@ class RefittedRiskScore_KFold(luigi.Task):
 				'unfiltered_data': FillnaDatabase()}
 
 	def run(self):
-		try:
-			os.makedirs(os.path.join(log_path,self.__class__.__name__))
-		except:
-			pass
-		with open(os.path.join(log_path,self.__class__.__name__,f"Log_{self.wf_name}_{self.score_name}_{self.seed}.txt"),'w') as f:
-			with contextlib.redirect_stdout(f):
-				df_input = pd.read_pickle(self.input()["unfiltered_data"]["pickle"].path)
-				df_filtered = pd.read_pickle(self.input()["data"]["pickle"].path)
-				label = WF_info[self.wf_name]["label_name"]
-				filter_function = WF_info[self.wf_name]["filter_function"]
-				features = WF_info[self.wf_name]["feature_list"]
-				group_label = WF_info[self.wf_name]["group_label"]
-				cv_type = WF_info[self.wf_name]["validation_type"]
-				folds = WF_info[self.wf_name]["cv_folds"]
-				feature_oddratio_dict = RS_info[self.score_name]["feature_oddratio"]
+		setupLog(self.__class__.__name__)
 
-				if ((cv_type == 'kfold') or (cv_type=='stratifiedkfold')):
-					tl_pp_dict = predict_kfold_refitted_RS(df_filtered, label, features, feature_oddratio_dict,  self.seed, folds)
-				elif ((cv_type == 'groupkfold') or (cv_type=='stratifiedgroupkfold')):
-					tl_pp_dict = predict_groupkfold_refitted_RS(df_filtered, label, features, group_label, cv_type, feature_oddratio_dict, self.seed, folds)
-				elif (cv_type == 'unfilteredkfold'):
-					tl_pp_dict = predict_filter_kfold_refitted_RS(df_input, label, features, filter_function, feature_oddratio_dict,  self.seed, folds)
-				else:
-					raise('cv_type not recognized')
+		df_input = pd.read_pickle(self.input()["unfiltered_data"]["pickle"].path)
+		df_filtered = pd.read_pickle(self.input()["data"]["pickle"].path)
+		label = WF_info[self.wf_name]["label_name"]
+		filter_function = WF_info[self.wf_name]["filter_function"]
+		features = WF_info[self.wf_name]["feature_list"]
+		group_label = WF_info[self.wf_name]["group_label"]
+		cv_type = WF_info[self.wf_name]["validation_type"]
+		folds = WF_info[self.wf_name]["cv_folds"]
+		feature_oddratio_dict = RS_info[self.score_name]["feature_oddratio"]
+
+		if ((cv_type == 'kfold') or (cv_type=='stratifiedkfold')):
+			tl_pp_dict = predict_kfold_refitted_RS(df_filtered, label, features, feature_oddratio_dict,  self.seed, folds)
+		elif ((cv_type == 'groupkfold') or (cv_type=='stratifiedgroupkfold')):
+			tl_pp_dict = predict_groupkfold_refitted_RS(df_filtered, label, features, group_label, cv_type, feature_oddratio_dict, self.seed, folds)
+		elif (cv_type == 'unfilteredkfold'):
+			tl_pp_dict = predict_filter_kfold_refitted_RS(df_input, label, features, filter_function, feature_oddratio_dict,  self.seed, folds)
+		else:
+			raise('cv_type not recognized')
 
 
 		with open(self.output().path, 'wb') as f:
@@ -412,33 +485,30 @@ class Evaluate_ML(luigi.Task):
 				yield CalculateKFold(wf_name=self.wf_name, seed=i,clf_name=self.clf_name)
 
 	def run(self):
-		try:
-			os.makedirs(os.path.join(log_path,self.__class__.__name__))
-		except:
-			pass
-		with open(os.path.join(log_path,self.__class__.__name__,f"EvaluateML_Log_{self.wf_name}_{self.clf_name}.txt"),'w') as f:
-			with contextlib.redirect_stdout(f):
-				(unfolded_pred_prob,unfolded_true_label, results_dict) = group_files_analyze(self.input(), self.clf_name)
-				with open(self.output()["pred_prob"].path, 'wb') as f:
-					# Pickle the 'data' dictionary using the highest protocol available.
-					pickle.dump(unfolded_pred_prob, f, pickle.HIGHEST_PROTOCOL)
-				with open(self.output()["true_label"].path, 'wb') as f:
-					# Pickle the 'data' dictionary using the highest protocol available.
-					pickle.dump(unfolded_true_label, f, pickle.HIGHEST_PROTOCOL)
-				with open(self.output()["auc_results"].path, 'wb') as f:
-					# Pickle the 'data' dictionary using the highest protocol available.
-					pickle.dump(results_dict, f, pickle.HIGHEST_PROTOCOL)
+		setupLog(self.__class__.__name__)
+
+		(unfolded_pred_prob,unfolded_true_label, results_dict) = group_files_analyze(self.input(), self.clf_name)
+		with open(self.output()["pred_prob"].path, 'wb') as f:
+			# Pickle the 'data' dictionary using the highest protocol available.
+			pickle.dump(unfolded_pred_prob, f, pickle.HIGHEST_PROTOCOL)
+		with open(self.output()["true_label"].path, 'wb') as f:
+			# Pickle the 'data' dictionary using the highest protocol available.
+			pickle.dump(unfolded_true_label, f, pickle.HIGHEST_PROTOCOL)
+		with open(self.output()["auc_results"].path, 'wb') as f:
+			# Pickle the 'data' dictionary using the highest protocol available.
+			pickle.dump(results_dict, f, pickle.HIGHEST_PROTOCOL)
 
 
 	def output(self):
-		try:
-			os.makedirs(os.path.join(tmp_path,self.__class__.__name__,self.wf_name))
-		except:
-			pass
 		if(self.ext_val == 'Yes'):
 			prefix = 'EXT_'
 		else:
 			prefix = ''
+		try:
+			os.makedirs(os.path.join(tmp_path,prefix+self.__class__.__name__,self.wf_name))
+		except:
+			pass
+
 		return {"pred_prob": luigi.LocalTarget(os.path.join(tmp_path,self.__class__.__name__,self.wf_name,f"Unfolded_Pred_Prob_{prefix}{self.clf_name}.pickle")),
 				"true_label": luigi.LocalTarget(os.path.join(tmp_path,self.__class__.__name__,self.wf_name,f"Unfolded_True_Label_{prefix}{self.clf_name}.pickle")),
 				"auc_results": luigi.LocalTarget(os.path.join(tmp_path,self.__class__.__name__,self.wf_name,f"AUC_results_{prefix}{self.clf_name}.pickle"))}
@@ -453,7 +523,7 @@ class EvaluateRiskScore(luigi.Task):
 			if(RS_info[self.score_name]['refit_oddratios'] == 'No'):
 				yield ExternalValidationRS(wf_name=self.wf_name,score_name=self.score_name)
 			elif(RS_info[self.score_name]['refit_oddratios'] == 'Yes'):
-				yield ExternalValidationRefittedRS(wf_name=self.wf_name, seed=i,score_name=self.score_name)
+				yield ExternalValidationRefittedRS(wf_name=self.wf_name, score_name=self.score_name)
 			else:
 				raise(f"invalid 'refit_or' value in score {score_name}")
 		else:
@@ -466,22 +536,18 @@ class EvaluateRiskScore(luigi.Task):
 					raise(f"invalid 'refit_or' value in score {score_name}")
 
 	def run(self):
-		try:
-			os.makedirs(os.path.join(log_path,self.__class__.__name__))
-		except:
-			pass
-		with open(os.path.join(log_path,self.__class__.__name__,f"EvaluateRS_Log_{self.wf_name}_{self.score_name}.txt"),'w') as f:
-			with contextlib.redirect_stdout(f):
-				(unfolded_pred_prob,unfolded_true_label,results_dict) = group_files_analyze(self.input(), self.score_name)
-				with open(self.output()["pred_prob"].path, 'wb') as f:
-					# Pickle the 'data' dictionary using the highest protocol available.
-					pickle.dump(unfolded_pred_prob, f, pickle.HIGHEST_PROTOCOL)
-				with open(self.output()["true_label"].path, 'wb') as f:
-					# Pickle the 'data' dictionary using the highest protocol available.
-					pickle.dump(unfolded_true_label, f, pickle.HIGHEST_PROTOCOL)
-				with open(self.output()["auc_results"].path, 'wb') as f:
-					# Pickle the 'data' dictionary using the highest protocol available.
-					pickle.dump(results_dict, f, pickle.HIGHEST_PROTOCOL)
+		setupLog(self.__class__.__name__)
+
+		(unfolded_pred_prob,unfolded_true_label,results_dict) = group_files_analyze(self.input(), self.score_name)
+		with open(self.output()["pred_prob"].path, 'wb') as f:
+			# Pickle the 'data' dictionary using the highest protocol available.
+			pickle.dump(unfolded_pred_prob, f, pickle.HIGHEST_PROTOCOL)
+		with open(self.output()["true_label"].path, 'wb') as f:
+			# Pickle the 'data' dictionary using the highest protocol available.
+			pickle.dump(unfolded_true_label, f, pickle.HIGHEST_PROTOCOL)
+		with open(self.output()["auc_results"].path, 'wb') as f:
+			# Pickle the 'data' dictionary using the highest protocol available.
+			pickle.dump(results_dict, f, pickle.HIGHEST_PROTOCOL)
 
 	def output(self):
 		try:
@@ -508,6 +574,7 @@ class ConfidenceIntervalHanleyRS(luigi.Task):
 			return FilterPreprocessExternalDatabase(self.wf_name)
 
 	def run(self):
+		setupLog(self.__class__.__name__)
 		df_input = pd.read_pickle(self.input()["pickle"].path)
 		(auc, stderr) = AUC_stderr_classic(df_input, label_name=WF_info[self.wf_name]["label_name"], feature_oddratio=RS_info[self.score_name]["feature_oddratio"])
 		ci95_low= auc-1.96*stderr
@@ -544,12 +611,16 @@ class DescriptiveXLS(luigi.Task):
 			return ProcessDatabase()
 
 	def run(self):
+		setupLog(self.__class__.__name__)
 		df_input = pd.read_pickle(self.input()["pickle"].path)
 		df_filtered = WF_info[self.wf_name]["filter_function"](df_input)
 		label = WF_info[self.wf_name]["label_name"]
 
 		df_output=create_descriptive_xls(df_filtered, self.wf_name, label)
-		df_output.to_excel(self.output().path)
+		writer = pd.ExcelWriter(self.output()["xls"].path, engine='xlsxwriter')
+		df_output.to_excel(writer, sheet_name='Sheet1')
+		writer.save()
+
 
 	def output(self):
 		try:
@@ -569,6 +640,7 @@ class FinalModelAndHyperparameterResults(luigi.Task):
 		return FilterPreprocessDatabase(self.wf_name)
 
 	def run(self):
+		setupLog(self.__class__.__name__)
 		df_filtered = pd.read_pickle(self.input()["pickle"].path)
 		label = WF_info[self.wf_name]["label_name"]
 		features = WF_info[self.wf_name]["feature_list"]
@@ -583,31 +655,34 @@ class FinalModelAndHyperparameterResults(luigi.Task):
 		Y = Y_full.loc[~Y_full[label].isnull()]
 
 		if(group_label is None):
-			self.clf.fit(X,Y)
+			self.clf.fit(X,Y.values.ravel().astype(int))
 		else:
 			G_full = df_filtered.loc[:,[group_label]]
 			G = G_full.loc[~Y_full[label].isnull()]
 			try:
-				self.clf.fit(X,Y,groups=G)
+				self.clf.fit(X,Y.values.ravel().astype(int),groups=G)
 			except:
-				self.clf.fit(X,Y)
+				self.clf.fit(X,Y.values.ravel().astype(int))
 
 
 		try:
 			self.calibrated_clf = sk_cal.CalibratedClassifierCV(self.clf.best_estimator_, method='sigmoid', cv=10)
 			try:
-				self.calibrated_clf.fit(X,Y,groups=G)
+				self.calibrated_clf.fit(X,Y.values.ravel().astype(int),groups=G)
 			except:
-				self.calibrated_clf.fit(X,Y)
+				self.calibrated_clf.fit(X,Y.values.ravel().astype(int))
 			with open(self.output().path,'wb') as f:
 				pickle.dump(self.calibrated_clf, f, pickle.HIGHEST_PROTOCOL)
-			pd.DataFrame(self.clf.cv_results_).to_excel(os.path.join(model_path,self.wf_name,f"HyperparameterResults_{self.wf_name}_{self.clf_name}.xlsx"))
+			writer = pd.ExcelWriter(os.path.join(model_path,self.wf_name,f"HyperparameterResults_{self.wf_name}_{self.clf_name}.xlsx"), engine='xlsxwriter')
+			pd.DataFrame(self.clf.cv_results_).to_excel(writer, sheet_name='Sheet1')
+			writer.save()
+
 		except:
 			self.calibrated_clf = sk_cal.CalibratedClassifierCV(self.clf, method='sigmoid', cv=10)
 			try:
-				self.calibrated_clf.fit(X,Y,groups=G)
+				self.calibrated_clf.fit(X,Y.values.ravel().astype(int),groups=G)
 			except:
-				self.calibrated_clf.fit(X,Y)
+				self.calibrated_clf.fit(X,Y.values.ravel().astype(int))
 			with open(self.output().path,'wb') as f:
 				pickle.dump(self.calibrated_clf, f, pickle.HIGHEST_PROTOCOL)
 
@@ -627,6 +702,7 @@ class FinalRefittedRSAndOddratios(luigi.Task):
 		return FilterPreprocessDatabase(self.wf_name)
 
 	def run(self):
+		setupLog(self.__class__.__name__)
 		df_filtered = pd.read_pickle(self.input()["pickle"].path)
 		label = WF_info[self.wf_name]["label_name"]
 		features = WF_info[self.wf_name]["feature_list"]
@@ -666,6 +742,7 @@ class AllModels_PairedTTest(luigi.Task):
 		return requirements
 
 	def run(self):
+		setupLog(self.__class__.__name__)
 		with open(self.output().path,'w') as f:
 			list_comparisons = []
 			for clf_or_score1 in self.list_ML+self.list_RS:
@@ -708,6 +785,7 @@ class GraphsWF(luigi.Task):
 		return requirements
 
 	def run(self):
+		setupLog(self.__class__.__name__)
 
 		# First we plot every ML model and risk score
 		plot_all_rocs(task_requires=self.input(), fig_path= self.output()["roc_all"].path,title=WF_info[self.wf_name]["formal_title"])
@@ -783,6 +861,7 @@ class ThresholdPoints(luigi.Task):
 			raise Exception(f"{self.clf_score} not in list_ristkscores or list_MLmodels")
 
 	def run(self):
+		setupLog(self.__class__.__name__)
 		with open(self.input()["pred_prob"].path, 'rb') as f:
 			pred_prob=pickle.load(f)
 		with open(self.input()["true_label"].path, 'rb') as f:
@@ -864,6 +943,7 @@ class BestMLModelReport(luigi.Task):
 		return requirements
 
 	def run(self):
+		setupLog(self.__class__.__name__)
 		# First we open the results dictionary for every ML model in the workflow wf_name to determine
 		# the best ML model
 		auc_ml = {}
@@ -926,6 +1006,7 @@ class BestRSReport(luigi.Task):
 		return requirements
 
 	def run(self):
+		setupLog(self.__class__.__name__)
 		# First we open the results dictionary for every ML model in the workflow wf_name to determine
 		# the best risk score
 		auc_rs = {}
@@ -976,9 +1057,10 @@ class MDAFeatureImportances(luigi.Task):
 			return {'df': FilterPreprocessDatabase(self.wf_name)}
 		elif self.ext_val == 'Yes':
 			return {'df': FilterPreprocessExternalDatabase(self.wf_name),
-			 		'clf': FinalModelAndHyperparameterResults(clf_name=self.clf_name, wf_name=self.wf_name)}
+					'clf': FinalModelAndHyperparameterResults(clf_name=self.clf_name, wf_name=self.wf_name)}
 
 	def run(self):
+		setupLog(self.__class__.__name__)
 		with open(self.output().path,'w') as f:
 			with contextlib.redirect_stdout(f):
 				df_input = pd.read_pickle(self.input()['df']["pickle"].path)
@@ -1020,6 +1102,7 @@ class AllThresholds(luigi.Task):
 			raise Exception(f"{self.clf_score} not in list_ristkscores or list_MLmodels")
 
 	def run(self):
+		setupLog(self.__class__.__name__)
 		with open(self.input()["pred_prob"].path, 'rb') as f:
 			pred_prob=pickle.load(f)
 		with open(self.input()["true_label"].path, 'rb') as f:
@@ -1063,6 +1146,7 @@ class OnlyGraphs(luigi.Task):
 
 
 	def run(self):
+		setupLog(self.__class__.__name__)
 		with open(self.output().path,'w') as f:
 			f.write("prueba\n")
 
@@ -1070,6 +1154,21 @@ class OnlyGraphs(luigi.Task):
 		TIMESTRING=dt.datetime.now().strftime("%y%m%d-%H%M%S")
 		return luigi.LocalTarget(os.path.join(log_path, f"OnlyGraphs_Log-{TIMESTRING}.txt"))
 
+# class FeatureScorer(luigi.Task):
+# 	wf_name = luigi.Parameter()
+# 	fs_name = luigi.Parameter()
+#
+# 	def requires(self):
+# 		for i in range(1,WF_info[self.wf_name]['cv_repetitions']+1):
+# 			yield FeatureScoringFolds(seed = i, cvfolds = WF_info[self.wf_name]['cvfolds'], wf_name = self.wf_name, fs_name = self.fs_name)
+#
+# 	def run(self):
+# 		setupLog(self.__class__.__name__)
+# 		pass
+#
+# 	def output(self):
+# 		pass
+#
 # class FeatureScoringFolds(luigi.Task):
 # 	seed = luigi.IntParameter()
 # 	cvfolds = luigi.IntParameter()
@@ -1080,6 +1179,7 @@ class OnlyGraphs(luigi.Task):
 # 		return FillnaDatabase()
 #
 # 	def run(self):
+# 		setupLog(self.__class__.__name__)
 #
 # 		df_input = pd.read_pickle(self.input()["pickle"].path)
 # 		filter_function = WF_info[self.wf_name]["filter_function"]
@@ -1090,10 +1190,8 @@ class OnlyGraphs(luigi.Task):
 # 		cv_type = WF_info[self.wf_name]["validation_type"]
 # 		fs_function = FS_info[self.fs_name]["scorer_function"]
 #
-# 		X = df_filtered.loc[:, :]
-# 		Y = df_filtered.loc[:,[label]]
-#
-# 		.astype(bool)
+# 		X = df_filtered.loc[:, features]
+# 		Y = df_filtered.loc[:,[label]].astype(bool)
 #
 # 		if (cv_type == 'kfold'):
 # 			kf = sk_ms.KFold(cvfolds, random_state=seed, shuffle=True)
@@ -1153,7 +1251,6 @@ class OnlyGraphs(luigi.Task):
 # 						f.write(f"{feature}, {score}\n")
 # 				fold+=1
 #
-#
 # 		pass
 # 	def output(self):
 # 		try:
@@ -1163,7 +1260,7 @@ class OnlyGraphs(luigi.Task):
 # 		for i in range(1,cvfolds+1):
 # 			yield {"pickle": luigi.LocalTarget(os.path.join(tmp_path,self.__class__.__name__,self.wf_name, f"FeatureScores_{self.FS_name}_r{self.seed}_f{i}.pickle")),
 # 					"txt": luigi.LocalTarget(os.path.join(tmp_path,self.__class__.__name__,self.wf_name, f"FeatureScores_{self.FS_name}_r{self.seed}_f{i}.txt"))}
-
+#
 
 class AllTasks(luigi.Task):
 
@@ -1204,6 +1301,7 @@ class AllTasks(luigi.Task):
 				yield AllModels_PairedTTest(wf_name = it_wf_name, list_ML=self.list_ML, list_RS=self.list_RS,ext_val = 'Yes')
 
 	def run(self):
+		setupLog(self.__class__.__name__)
 		with open(self.output().path,'w') as f:
 			f.write("prueba\n")
 

@@ -1,4 +1,4 @@
-.values.ravelimport numpy as np
+import numpy as np
 import pandas as pd
 import sklearn.model_selection as sk_ms
 import sklearn.utils as sk_u
@@ -8,7 +8,7 @@ import time
 
 from .stratifiedgroupkfold import StratifiedGroupKFold
 
-def external_validation_RS(external_data, label, score_label, feature_oddratio):
+def external_validation_RS(external_data, label, feature_oddratio):
 
 	X = external_data
 	Y = external_data.loc[:,[label]]
@@ -53,14 +53,14 @@ def predict_filter_kfold_ML(data, label, features, filter_function, clf, seed, c
 		X_test = data_test.loc[:,features]
 		Y_test = data_test.loc[:,[label]]
 
-		clf.fit(X_train, Y_train.values.ravel())
+		clf.fit(X_train, Y_train.values.ravel().astype(int))
 
 		if hasattr(clf, 'best_estimator_'):
 			calibrated_clf = sk_cal.CalibratedClassifierCV(clf.best_estimator_, method='isotonic', cv=10)
 		else:
 			calibrated_clf = sk_cal.CalibratedClassifierCV(clf, method='isotonic', cv=10)
 
-		calibrated_clf.fit(X_train, Y_train.values.ravel())
+		calibrated_clf.fit(X_train, Y_train.values.ravel().astype(int))
 
 		try:
 			Y_prob = calibrated_clf.predict_proba(X_test)
@@ -124,14 +124,14 @@ def predict_kfold_ML(data, label, features, cv_type, clf, seed, cvfolds):
 		X_train, X_test = X.iloc[train_index], X.iloc[test_index]
 		Y_train, Y_test = Y.iloc[train_index], Y.iloc[test_index]
 
-		clf.fit(X_train, Y_train.values.ravel())
+		clf.fit(X_train, Y_train.values.ravel().astype(int))
 
 		if hasattr(clf, 'best_estimator_'):
 			calibrated_clf = sk_cal.CalibratedClassifierCV(clf.best_estimator_, method='isotonic', cv=10)
 		else:
 			calibrated_clf = sk_cal.CalibratedClassifierCV(clf, method='isotonic', cv=10)
 
-		calibrated_clf.fit(X_train, Y_train.values.ravel())
+		calibrated_clf.fit(X_train, Y_train.values.ravel().astype(int))
 
 		try:
 			Y_prob = calibrated_clf.predict_proba(X_test)
@@ -197,9 +197,9 @@ def predict_groupkfold_ML(data, label, features, group_label, cv_type, clf, seed
 		G_train, G_test = G.iloc[train_index], G.iloc[test_index]
 
 		try:
-			clf.fit(X_train, Y_train.values.ravel(), groups=G_train)
+			clf.fit(X_train, Y_train.values.ravel().astype(int), groups=G_train)
 		except:
-			clf.fit(X_train, Y_train.values.ravel())
+			clf.fit(X_train, Y_train.values.ravel().astype(int))
 
 		if hasattr(clf, 'best_estimator_'):
 			calibrated_clf = sk_cal.CalibratedClassifierCV(clf.best_estimator_, method='isotonic', cv=10)
@@ -207,9 +207,9 @@ def predict_groupkfold_ML(data, label, features, group_label, cv_type, clf, seed
 			calibrated_clf = sk_cal.CalibratedClassifierCV(clf, method='isotonic', cv=10)
 
 		try:
-			calibrated_clf.fit(X_train, Y_train.values.ravel(), groups=G_train)
+			calibrated_clf.fit(X_train, Y_train.values.ravel().astype(int), groups=G_train)
 		except:
-			calibrated_clf.fit(X_train, Y_train.values.ravel())
+			calibrated_clf.fit(X_train, Y_train.values.ravel().astype(int))
 
 		try:
 			Y_prob = calibrated_clf.predict_proba(X_test)
@@ -275,7 +275,7 @@ def predict_kfold_refitted_RS(data, label, features, cv_type, feature_oddratio, 
 		X_train, X_test = X.iloc[train_index], X.iloc[test_index]
 		Y_train, Y_test = Y.iloc[train_index], Y.iloc[test_index]
 		X_train = X_train.loc[:,list(feature_oddratio.keys())]
-		lr.fit(X_train, Y_train.values.ravel())
+		lr.fit(X_train, Y_train.values.ravel().astype(int))
 		Y_prob = pd.Series(0, index=X_test.index)
 		n_feat=0
 		for feat in feature_oddratio.keys():
@@ -312,7 +312,7 @@ def predict_groupkfold_refitted_RS(data, label, features, group_label, cv_type, 
 		Y_train, Y_test = Y.iloc[train_index], Y.iloc[test_index]
 
 		X_train = X_train.loc[:,list(feature_oddratio.keys())]
-		lr.fit(X_train, Y_train.values.ravel()
+		lr.fit(X_train, Y_train.values.ravel().astype(int))
 		Y_prob = pd.Series(0, index=X_test.index)
 		n_feat=0
 		for feat in feature_oddratio.keys():
@@ -331,7 +331,7 @@ def refitted_oddratios(data, label, feature_oddratio):
 	Y = data.loc[:,[label]].astype(bool)
 
 	lr = sk_lm.LogisticRegression(penalty='none', solver = 'saga')
-	lr.fit(X, Y.values.ravel())
+	lr.fit(X, Y.values.ravel().astype(int))
 
 	refitted_or = {}
 

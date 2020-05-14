@@ -79,6 +79,24 @@ def cutoff_threshold_single(y_prob, y_true):
 	max_auc=0
 	fpr,tpr, thresholds = sk_m.roc_curve(y_true, y_prob)
 
+	if (len(thresholds) > 100) :
+		new_thresholds=[]
+		new_fpr=[]
+		new_tpr=[]
+		list_subarrays_thr=np.array_split(thresholds,100)
+		list_subarrays_tpr=np.array_split(tpr,100)
+		list_subarrays_fpr=np.array_split(fpr,100)
+		for i in list_subarrays_thr:
+			new_thresholds.append(i[0])
+		for i in list_subarrays_fpr:
+			new_fpr.append(i[0])
+		for i in list_subarrays_tpr:
+			new_tpr.append(i[0])
+
+		thresholds=np.array(new_thresholds)
+		fpr = np.array(new_fpr)
+		tpr = np.array(new_tpr)
+
 	for (x1, y1, t1) in zip(fpr, tpr, thresholds):
 		auc = sk_m.auc([0,x1,1],[0,y1,1])
 		if (auc > max_auc):
@@ -99,6 +117,24 @@ def cutoff_threshold_double(y_prob, y_true):
 	best_threshold2=1
 	max_auc=0
 	fpr,tpr, thresholds = sk_m.roc_curve(y_true, y_prob)
+
+	if (len(thresholds) > 100) :
+		new_thresholds=[]
+		new_fpr=[]
+		new_tpr=[]
+		list_subarrays_thr=np.array_split(thresholds,100)
+		list_subarrays_tpr=np.array_split(tpr,100)
+		list_subarrays_fpr=np.array_split(fpr,100)
+		for i in list_subarrays_thr:
+			new_thresholds.append(i[0])
+		for i in list_subarrays_fpr:
+			new_fpr.append(i[0])
+		for i in list_subarrays_tpr:
+			new_tpr.append(i[0])
+
+		thresholds=np.array(new_thresholds)
+		fpr = np.array(new_fpr)
+		tpr = np.array(new_tpr)
 
 	for (x1, y1, t1) in zip(fpr, tpr, thresholds):
 		for (x2, y2, t2) in zip(fpr[thresholds > t1], tpr[thresholds>t1], thresholds[thresholds>t1]):
@@ -175,7 +211,26 @@ def cutoff_threshold_maxfbeta(y_prob, y_true, beta):
 	y_prob = np.array(y_prob)
 
 	precision, recall, thresholds = sk_m.precision_recall_curve(y_true, y_prob)
-	auprc  = sk_m.auc(recall, precision)
+
+	if (len(thresholds) > 100) :
+		new_thresholds=[]
+		new_pre=[]
+		new_rec=[]
+		list_subarrays_thr=np.array_split(thresholds,100)
+		list_subarrays_pre=np.array_split(precision,100)
+		list_subarrays_rec=np.array_split(recall,100)
+		for i in list_subarrays_thr:
+			new_thresholds.append(i[0])
+		for i in list_subarrays_pre:
+			new_pre.append(i[0])
+		for i in list_subarrays_rec:
+			new_rec.append(i[0])
+
+		thresholds=np.array(new_thresholds)
+		precision = np.array(new_pre)
+		recall = np.array(new_rec)
+
+
 	max_f1 = 0
 	for r, p, t in zip(recall, precision, thresholds):
 		if p + r == 0: continue
@@ -193,6 +248,25 @@ def cutoff_threshold_accuracy(y_prob, y_true):
 	y_prob = np.array(y_prob)
 
 	fpr,tpr, thresholds = sk_m.roc_curve(y_true, y_prob)
+
+	if (len(thresholds) > 100) :
+		new_thresholds=[]
+		new_fpr=[]
+		new_tpr=[]
+		list_subarrays_thr=np.array_split(thresholds,100)
+		list_subarrays_tpr=np.array_split(tpr,100)
+		list_subarrays_fpr=np.array_split(fpr,100)
+		for i in list_subarrays_thr:
+			new_thresholds.append(i[0])
+		for i in list_subarrays_fpr:
+			new_fpr.append(i[0])
+		for i in list_subarrays_tpr:
+			new_tpr.append(i[0])
+
+		thresholds=np.array(new_thresholds)
+		fpr = np.array(new_fpr)
+		tpr = np.array(new_tpr)
+
 	best_threshold=0
 	true = 0
 
