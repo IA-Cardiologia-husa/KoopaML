@@ -20,7 +20,7 @@
 # WF_info['TallHeart'] = {'formal_title': 'Prediction of Heart Attack in tall patients',
 #						  'label_name': 'Heart Attack',
 #						  'feature_list': ['Age','Height','Weight','Arterial Tension'],
-#						  'filter_funtion': lambda df: df.loc[df['Height']>200].reset_index(drop=True),
+#						  'filter_function': lambda df: df.loc[df['Height']>200].reset_index(drop=True),
 #						  'group_label': None,
 #						  'validation_type':'stratifiedkfold',
 #						  'cv_folds': 10,
