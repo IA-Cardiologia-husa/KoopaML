@@ -409,7 +409,7 @@ class RiskScore_KFold(luigi.Task):
 		feature_oddratio_dict = RS_info[self.score_name]["feature_oddratio"]
 
 		if ((cv_type == 'kfold') or (cv_type=='stratifiedkfold')):
-			tl_pp_dict = predict_kfold_RS(df_filtered, label, features, feature_oddratio_dict, self.seed, folds)
+			tl_pp_dict = predict_kfold_RS(df_input, label, features, filter_function, feature_oddratio_dict, self.seed, folds)
 		elif ((cv_type == 'groupkfold') or (cv_type=='stratifiedgroupkfold')):
 			tl_pp_dict = predict_groupkfold_RS(df_filtered, label, features, group_label, cv_type, feature_oddratio_dict,  self.seed, folds)
 		elif (cv_type == 'unfilteredkfold'):
