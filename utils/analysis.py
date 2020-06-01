@@ -449,7 +449,7 @@ def group_files_analyze(task_requires, clf_name):
 	n_folds=n_repfolds/n_reps
 
 	unfolded_true_label=np.array(unfolded_true_label)
-	unfolded_pred_prob = np.array(unfolded_pred_prob)
+	unfolded_pred_prob =np.array(unfolded_pred_prob)
 
 	pooling_aucroc = sk_m.roc_auc_score(unfolded_true_label[~np.isnan(unfolded_true_label)].astype(bool),unfolded_pred_prob[~np.isnan(unfolded_true_label)])
 	averaging_aucroc = aucroc_score/n_repfolds
@@ -466,7 +466,14 @@ def group_files_analyze(task_requires, clf_name):
 		std_error_aucroc = np.sqrt(averaging_sample_variance_aucroc*(1/n_repfolds+1/(n_folds-1)))
 		std_error_aucpr = np.sqrt(averaging_sample_variance_aucpr*(1/n_repfolds+1/(n_folds-1)))
 	else:
-		std_error_aucroc = 1e100
+		m = (true_label==0).sum()
+		n = (true_label==1).sum()
+		auc = pooling_aucroc
+		pxxy = auc/(2-auc)
+		pxyy = 2*auc**2/(1+auc)
+		variance = (auc*(1-auc)+(m-1)*(pxxy-auc**2)+(n-1)*(pxyy-auc**2))/(m*n)
+		std_error_aucroc = np.sqrt(variance)
+		c=1
 		std_error_aucpr = 1e100
 
 	print('Pooling AUC ROC:', pooling_aucroc)

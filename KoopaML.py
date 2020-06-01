@@ -507,13 +507,13 @@ class Evaluate_ML(luigi.Task):
 		else:
 			prefix = ''
 		try:
-			os.makedirs(os.path.join(tmp_path,prefix+self.__class__.__name__,self.wf_name))
+			os.makedirs(os.path.join(tmp_path,self.__class__.__name__,prefix+self.wf_name))
 		except:
 			pass
 
-		return {"pred_prob": luigi.LocalTarget(os.path.join(tmp_path,self.__class__.__name__,self.wf_name,f"Unfolded_Pred_Prob_{prefix}{self.clf_name}.pickle")),
-				"true_label": luigi.LocalTarget(os.path.join(tmp_path,self.__class__.__name__,self.wf_name,f"Unfolded_True_Label_{prefix}{self.clf_name}.pickle")),
-				"auc_results": luigi.LocalTarget(os.path.join(tmp_path,self.__class__.__name__,self.wf_name,f"AUC_results_{prefix}{self.clf_name}.pickle"))}
+		return {"pred_prob": luigi.LocalTarget(os.path.join(tmp_path,self.__class__.__name__,prefix+self.wf_name,f"Unfolded_Pred_Prob_{prefix}{self.clf_name}.pickle")),
+				"true_label": luigi.LocalTarget(os.path.join(tmp_path,self.__class__.__name__,prefix+self.wf_name,f"Unfolded_True_Label_{prefix}{self.clf_name}.pickle")),
+				"auc_results": luigi.LocalTarget(os.path.join(tmp_path,self.__class__.__name__,prefix+self.wf_name,f"AUC_results_{prefix}{self.clf_name}.pickle"))}
 
 class EvaluateRiskScore(luigi.Task):
 	wf_name = luigi.Parameter()
@@ -552,17 +552,17 @@ class EvaluateRiskScore(luigi.Task):
 			pickle.dump(results_dict, f, pickle.HIGHEST_PROTOCOL)
 
 	def output(self):
-		try:
-			os.makedirs(os.path.join(tmp_path, self.__class__.__name__,self.wf_name))
-		except:
-			pass
 		if(self.ext_val == 'Yes'):
 			prefix = 'EXT_'
 		else:
 			prefix = ''
-		return {"pred_prob": luigi.LocalTarget(os.path.join(tmp_path, self.__class__.__name__,self.wf_name,f"Unfolded_Pred_Prob_{prefix}{self.score_name}.pickle")),
-				"true_label": luigi.LocalTarget(os.path.join(tmp_path, self.__class__.__name__,self.wf_name,f"Unfolded_True_Label_{prefix}{self.score_name}.pickle")),
-				"auc_results": luigi.LocalTarget(os.path.join(tmp_path, self.__class__.__name__,self.wf_name,f"AUC_results_{prefix}{self.score_name}.pickle"))}
+		try:
+			os.makedirs(os.path.join(tmp_path, self.__class__.__name__,prefix+self.wf_name))
+		except:
+			pass
+		return {"pred_prob": luigi.LocalTarget(os.path.join(tmp_path, self.__class__.__name__,prefix+self.wf_name,f"Unfolded_Pred_Prob_{prefix}{self.score_name}.pickle")),
+				"true_label": luigi.LocalTarget(os.path.join(tmp_path, self.__class__.__name__,prefix+self.wf_name,f"Unfolded_True_Label_{prefix}{self.score_name}.pickle")),
+				"auc_results": luigi.LocalTarget(os.path.join(tmp_path, self.__class__.__name__,prefix+self.wf_name,f"AUC_results_{prefix}{self.score_name}.pickle"))}
 
 class ConfidenceIntervalHanleyRS(luigi.Task):
 	wf_name = luigi.Parameter()
@@ -763,11 +763,15 @@ class AllModels_PairedTTest(luigi.Task):
 						f.write(f"{wf_formal_title}: {formal_name1}-{formal_name2}, Avg Diff: {averaging_diff}, p-value: {pvalue}\n")
 
 	def output(self):
+		if(self.ext_val == 'Yes'):
+			prefix = 'EXT_'
+		else:
+			prefix = ''
 		try:
 			os.makedirs(os.path.join(report_path, self.wf_name))
 		except:
 			pass
-		return luigi.LocalTarget(os.path.join(report_path, self.wf_name,f"AllModelsPairedTTest_{self.wf_name}.txt"))
+		return luigi.LocalTarget(os.path.join(report_path, self.wf_name,f"AllModelsPairedTTest_{prefix}{self.wf_name}.txt"))
 
 class GraphsWF(luigi.Task):
 
