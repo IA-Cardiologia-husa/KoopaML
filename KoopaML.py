@@ -364,7 +364,7 @@ class CalculateKFold(luigi.Task):
 		cv_type = WF_info[self.wf_name]["validation_type"]
 		folds = WF_info[self.wf_name]["cv_folds"]
 		clf = ML_info[self.clf_name]["clf"]
-		calibration = ML_infp[self.clf_name]["calibration"]
+		calibration = ML_info[self.clf_name]["calibration"]
 
 		if ((cv_type == 'kfold') or (cv_type=='stratifiedkfold')):
 			tl_pp_dict = predict_kfold_ML(df_filtered, label, features, cv_type, clf, calibration, self.seed, folds)
@@ -650,7 +650,7 @@ class FinalModelAndHyperparameterResults(luigi.Task):
 		group_label = WF_info[self.wf_name]["group_label"]
 
 		self.clf=ML_info[self.clf_name]["clf"]
-		calibration = ML_infp[self.clf_name]["calibration"]
+		calibration = ML_info[self.clf_name]["calibration"]
 
 		X_full = df_filtered.loc[:,features]
 		Y_full = df_filtered.loc[:,[label]]
@@ -668,7 +668,7 @@ class FinalModelAndHyperparameterResults(luigi.Task):
 			except:
 				self.clf.fit(X,Y.values.ravel().astype(int))
 
-		if hasattr(clf, 'best_estimator_'):
+		if hasattr(self.clf, 'best_estimator_'):
 			writer = pd.ExcelWriter(os.path.join(model_path,self.wf_name,f"HyperparameterResults_{self.wf_name}_{self.clf_name}.xlsx"), engine='xlsxwriter')
 			pd.DataFrame(self.clf.cv_results_).to_excel(writer, sheet_name='Sheet1')
 			writer.save()
@@ -699,14 +699,6 @@ class FinalModelAndHyperparameterResults(luigi.Task):
 		with open(self.output().path,'wb') as f:
 			pickle.dump(self.calibrated_clf, f, pickle.HIGHEST_PROTOCOL)
 
-		except:
-			self.calibrated_clf = sk_cal.CalibratedClassifierCV(self.clf, method='sigmoid', cv=10)
-			try:
-				self.calibrated_clf.fit(X,Y.values.ravel().astype(int),groups=G)
-			except:
-				self.calibrated_clf.fit(X,Y.values.ravel().astype(int))
-			with open(self.output().path,'wb') as f:
-				pickle.dump(self.calibrated_clf, f, pickle.HIGHEST_PROTOCOL)
 
 	def output(self):
 		try:
