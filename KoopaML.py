@@ -364,13 +364,14 @@ class CalculateKFold(luigi.Task):
 		cv_type = WF_info[self.wf_name]["validation_type"]
 		folds = WF_info[self.wf_name]["cv_folds"]
 		clf = ML_info[self.clf_name]["clf"]
+		calibration = ML_infp[self.clf_name]["calibration"]
 
 		if ((cv_type == 'kfold') or (cv_type=='stratifiedkfold')):
-			tl_pp_dict = predict_kfold_ML(df_filtered, label, features, cv_type, clf, self.seed, folds)
+			tl_pp_dict = predict_kfold_ML(df_filtered, label, features, cv_type, clf, calibration, self.seed, folds)
 		elif ((cv_type == 'groupkfold') or (cv_type=='stratifiedgroupkfold')):
-			tl_pp_dict = predict_groupkfold_ML(df_filtered, label, features, group_label, cv_type, clf, self.seed, folds)
+			tl_pp_dict = predict_groupkfold_ML(df_filtered, label, features, group_label, cv_type, clf, calibration,self.seed, folds)
 		elif (cv_type == 'unfilteredkfold'):
-			tl_pp_dict = predict_filter_kfold_ML(df_input, label, features, filter_function, clf, self.seed, folds)
+			tl_pp_dict = predict_filter_kfold_ML(df_input, label, features, filter_function, clf, calibration,self.seed, folds)
 		else:
 			raise('cv_type not recognized')
 
@@ -409,7 +410,7 @@ class RiskScore_KFold(luigi.Task):
 		feature_oddratio_dict = RS_info[self.score_name]["feature_oddratio"]
 
 		if ((cv_type == 'kfold') or (cv_type=='stratifiedkfold')):
-			tl_pp_dict = predict_kfold_RS(df_input, label, features, filter_function, feature_oddratio_dict, self.seed, folds)
+			tl_pp_dict = predict_kfold_RS(df_filtered, label, features, cv_type, feature_oddratio_dict, self.seed, folds)
 		elif ((cv_type == 'groupkfold') or (cv_type=='stratifiedgroupkfold')):
 			tl_pp_dict = predict_groupkfold_RS(df_filtered, label, features, group_label, cv_type, feature_oddratio_dict,  self.seed, folds)
 		elif (cv_type == 'unfilteredkfold'):
@@ -427,7 +428,7 @@ class RiskScore_KFold(luigi.Task):
 			os.makedirs(os.path.join(tmp_path,self.__class__.__name__, self.wf_name, self.score_name))
 		except:
 			pass
-		return luigi.LocalTarget(os.path.join(tmp_path,self.__class__.__name__, self.wf_name, self.score_name, f"TrueLabel_PredProb_{self.wf_name}_{self.score_name}_{self.seed}.dict"))
+		return luigi.LocalTarget(os.path.join(tmp_path,self.__class__.__name__, self.wf_name, self.score_name, f"TrueLabel_PredProb_{self.seed}.dict"))
 
 class RefittedRiskScore_KFold(luigi.Task):
 	seed = luigi.IntParameter()
@@ -649,6 +650,7 @@ class FinalModelAndHyperparameterResults(luigi.Task):
 		group_label = WF_info[self.wf_name]["group_label"]
 
 		self.clf=ML_info[self.clf_name]["clf"]
+		calibration = ML_infp[self.clf_name]["calibration"]
 
 		X_full = df_filtered.loc[:,features]
 		Y_full = df_filtered.loc[:,[label]]
@@ -666,18 +668,36 @@ class FinalModelAndHyperparameterResults(luigi.Task):
 			except:
 				self.clf.fit(X,Y.values.ravel().astype(int))
 
+		if hasattr(clf, 'best_estimator_'):
+			writer = pd.ExcelWriter(os.path.join(model_path,self.wf_name,f"HyperparameterResults_{self.wf_name}_{self.clf_name}.xlsx"), engine='xlsxwriter')
+			pd.DataFrame(self.clf.cv_results_).to_excel(writer, sheet_name='Sheet1')
+			writer.save()
 
-		try:
-			self.calibrated_clf = sk_cal.CalibratedClassifierCV(self.clf.best_estimator_, method='sigmoid', cv=10)
+		if(calibration is None):
+			self.calibrated_clf = self.clf
+		elif(calibration == 'isotonic'):
+			if hasattr(clf, 'best_estimator_'):
+				self.calibrated_clf = sk_cal.CalibratedClassifierCV(self.clf.best_estimator_, method='isotonic', cv=10)
+			else:
+				self.calibrated_clf = sk_cal.CalibratedClassifierCV(self.clf, method='isotonic', cv=10)
 			try:
 				self.calibrated_clf.fit(X,Y.values.ravel().astype(int),groups=G)
 			except:
 				self.calibrated_clf.fit(X,Y.values.ravel().astype(int))
-			with open(self.output().path,'wb') as f:
-				pickle.dump(self.calibrated_clf, f, pickle.HIGHEST_PROTOCOL)
-			writer = pd.ExcelWriter(os.path.join(model_path,self.wf_name,f"HyperparameterResults_{self.wf_name}_{self.clf_name}.xlsx"), engine='xlsxwriter')
-			pd.DataFrame(self.clf.cv_results_).to_excel(writer, sheet_name='Sheet1')
-			writer.save()
+		elif(calibration == 'sigmoid'):
+			if hasattr(clf, 'best_estimator_'):
+				self.calibrated_clf = sk_cal.CalibratedClassifierCV(self.clf.best_estimator_, method='sigmoid', cv=10)
+			else:
+				self.calibrated_clf = sk_cal.CalibratedClassifierCV(self.clf, method='sigmoid', cv=10)
+			try:
+				self.calibrated_clf.fit(X,Y.values.ravel().astype(int),groups=G)
+			except:
+				self.calibrated_clf.fit(X,Y.values.ravel().astype(int))
+		else:
+			print('unknown calibration type')
+			raise
+		with open(self.output().path,'wb') as f:
+			pickle.dump(self.calibrated_clf, f, pickle.HIGHEST_PROTOCOL)
 
 		except:
 			self.calibrated_clf = sk_cal.CalibratedClassifierCV(self.clf, method='sigmoid', cv=10)

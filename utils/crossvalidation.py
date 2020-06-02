@@ -34,7 +34,7 @@ def external_validation(external_data, label, features, clf):
 
 	return tl_pp_dict
 
-def predict_filter_kfold_ML(data, label, features, filter_function, clf, seed, cvfolds):
+def predict_filter_kfold_ML(data, label, features, filter_function, clf, calibration, seed, cvfolds):
 
 	kf = sk_ms.KFold(cvfolds, random_state=seed, shuffle=True)
 
@@ -53,20 +53,32 @@ def predict_filter_kfold_ML(data, label, features, filter_function, clf, seed, c
 		X_test = data_test.loc[:,features]
 		Y_test = data_test.loc[:,[label]]
 
-		clf.fit(X_train, Y_train.values.ravel().astype(int))
-
-		if hasattr(clf, 'best_estimator_'):
-			calibrated_clf = sk_cal.CalibratedClassifierCV(clf.best_estimator_, method='isotonic', cv=10)
+		if (calibration is None):
+			clf.fit(X_train, Y_train.values.ravel().astype(int))
 		else:
-			calibrated_clf = sk_cal.CalibratedClassifierCV(clf, method='isotonic', cv=10)
-
-		calibrated_clf.fit(X_train, Y_train.values.ravel().astype(int))
-
+			if hasattr(clf, 'best_estimator_'):
+				clf.fit(X_train, Y_train.values.ravel().astype(int))
+				if(calibration == 'isotonic'):
+					clf = sk_cal.CalibratedClassifierCV(clf.best_estimator_, method='isotonic', cv=10)
+					clf.fit(X_train, Y_train.values.ravel().astype(int))
+				elif(calibration == 'sigmoid'):
+					clf = sk_cal.CalibratedClassifierCV(clf.best_estimator_, method='sigmoid', cv=10)
+					clf.fit(X_train, Y_train.values.ravel().astype(int))
+				else:
+					print('Unknown Calibration type')
+					raise
+			else:
+				if(calibration == 'isotonic'):
+					clf = sk_cal.CalibratedClassifierCV(clf, method='isotonic', cv=10)
+					clf.fit(X_train, Y_train.values.ravel().astype(int))
+				elif(calibration == 'sigmoid'):
+					clf = sk_cal.CalibratedClassifierCV(clf, method='sigmoid', cv=10)
+					clf.fit(X_train, Y_train.values.ravel().astype(int))
 		try:
-			Y_prob = calibrated_clf.predict_proba(X_test)
+			Y_prob = clf.predict_proba(X_test)
 			predicted_probability.append(Y_prob[:,1])
 		except:
-			Y_prob = calibrated_clf.decision_function(X_test)
+			Y_prob = clf.decision_function(X_test)
 			predicted_probability.append(Y_prob)
 		true_label.append(list(Y_test.values.flat))
 
@@ -104,7 +116,7 @@ def predict_filter_kfold_RS(data, label, features, filter_function, feature_oddr
 
 	return tl_pp_dict
 
-def predict_kfold_ML(data, label, features, cv_type, clf, seed, cvfolds):
+def predict_kfold_ML(data, label, features, cv_type, clf, calibration, seed, cvfolds):
 
 
 	X = data.loc[:,features]
@@ -124,20 +136,32 @@ def predict_kfold_ML(data, label, features, cv_type, clf, seed, cvfolds):
 		X_train, X_test = X.iloc[train_index], X.iloc[test_index]
 		Y_train, Y_test = Y.iloc[train_index], Y.iloc[test_index]
 
-		clf.fit(X_train, Y_train.values.ravel().astype(int))
-
-		if hasattr(clf, 'best_estimator_'):
-			calibrated_clf = sk_cal.CalibratedClassifierCV(clf.best_estimator_, method='isotonic', cv=10)
+		if (calibration is None):
+			clf.fit(X_train, Y_train.values.ravel().astype(int))
 		else:
-			calibrated_clf = sk_cal.CalibratedClassifierCV(clf, method='isotonic', cv=10)
-
-		calibrated_clf.fit(X_train, Y_train.values.ravel().astype(int))
-
+			if hasattr(clf, 'best_estimator_'):
+				clf.fit(X_train, Y_train.values.ravel().astype(int))
+				if(calibration == 'isotonic'):
+					clf = sk_cal.CalibratedClassifierCV(clf.best_estimator_, method='isotonic', cv=10)
+					clf.fit(X_train, Y_train.values.ravel().astype(int))
+				elif(calibration == 'sigmoid'):
+					clf = sk_cal.CalibratedClassifierCV(clf.best_estimator_, method='sigmoid', cv=10)
+					clf.fit(X_train, Y_train.values.ravel().astype(int))
+				else:
+					print('Unknown Calibration type')
+					raise
+			else:
+				if(calibration == 'isotonic'):
+					clf = sk_cal.CalibratedClassifierCV(clf, method='isotonic', cv=10)
+					clf.fit(X_train, Y_train.values.ravel().astype(int))
+				elif(calibration == 'sigmoid'):
+					clf = sk_cal.CalibratedClassifierCV(clf, method='sigmoid', cv=10)
+					clf.fit(X_train, Y_train.values.ravel().astype(int))
 		try:
-			Y_prob = calibrated_clf.predict_proba(X_test)
+			Y_prob = clf.predict_proba(X_test)
 			predicted_probability.append(Y_prob[:,1])
 		except:
-			Y_prob = calibrated_clf.decision_function(X_test)
+			Y_prob = clf.decision_function(X_test)
 			predicted_probability.append(Y_prob)
 		true_label.append(list(Y_test.values.flat))
 
@@ -174,7 +198,7 @@ def predict_kfold_RS(data, label, features, cv_type,  feature_oddratio, seed, cv
 
 	return tl_pp_dict
 
-def predict_groupkfold_ML(data, label, features, group_label, cv_type, clf, seed, cvfolds):
+def predict_groupkfold_ML(data, label, features, group_label, cv_type, clf, calibration, seed, cvfolds):
 
 	X = data.loc[:,features]
 	Y = data.loc[:,[label]].astype(bool)
@@ -196,26 +220,50 @@ def predict_groupkfold_ML(data, label, features, group_label, cv_type, clf, seed
 		Y_train, Y_test = Y.iloc[train_index], Y.iloc[test_index]
 		G_train, G_test = G.iloc[train_index], G.iloc[test_index]
 
-		try:
-			clf.fit(X_train, Y_train.values.ravel().astype(int), groups=G_train)
-		except:
-			clf.fit(X_train, Y_train.values.ravel().astype(int))
-
-		if hasattr(clf, 'best_estimator_'):
-			calibrated_clf = sk_cal.CalibratedClassifierCV(clf.best_estimator_, method='isotonic', cv=10)
+		if (calibration is None):
+			try:
+				clf.fit(X_train, Y_train.values.ravel().astype(int), groups=G_train)
+			except:
+				clf.fit(X_train, Y_train.values.ravel().astype(int))
 		else:
-			calibrated_clf = sk_cal.CalibratedClassifierCV(clf, method='isotonic', cv=10)
-
+			if hasattr(clf, 'best_estimator_'):
+				try:
+					clf.fit(X_train, Y_train.values.ravel().astype(int), groups=G_train)
+				except:
+					clf.fit(X_train, Y_train.values.ravel().astype(int))
+				if(calibration == 'isotonic'):
+					clf = sk_cal.CalibratedClassifierCV(clf.best_estimator_, method='isotonic', cv=10)
+					try:
+						clf.fit(X_train, Y_train.values.ravel().astype(int), groups=G_train)
+					except:
+						clf.fit(X_train, Y_train.values.ravel().astype(int))
+				elif(calibration == 'sigmoid'):
+					clf = sk_cal.CalibratedClassifierCV(clf.best_estimator_, method='sigmoid', cv=10)
+					try:
+						clf.fit(X_train, Y_train.values.ravel().astype(int), groups=G_train)
+					except:
+						clf.fit(X_train, Y_train.values.ravel().astype(int))
+				else:
+					print('Unknown Calibration type')
+					raise
+			else:
+				if(calibration == 'isotonic'):
+					clf = sk_cal.CalibratedClassifierCV(clf, method='isotonic', cv=10)
+					try:
+						clf.fit(X_train, Y_train.values.ravel().astype(int), groups=G_train)
+					except:
+						clf.fit(X_train, Y_train.values.ravel().astype(int))
+				elif(calibration == 'sigmoid'):
+					clf = sk_cal.CalibratedClassifierCV(clf, method='sigmoid', cv=10)
+					try:
+						clf.fit(X_train, Y_train.values.ravel().astype(int), groups=G_train)
+					except:
+						clf.fit(X_train, Y_train.values.ravel().astype(int))
 		try:
-			calibrated_clf.fit(X_train, Y_train.values.ravel().astype(int), groups=G_train)
-		except:
-			calibrated_clf.fit(X_train, Y_train.values.ravel().astype(int))
-
-		try:
-			Y_prob = calibrated_clf.predict_proba(X_test)
+			Y_prob = clf.predict_proba(X_test)
 			predicted_probability.append(Y_prob[:,1])
 		except:
-			Y_prob = calibrated_clf.decision_function(X_test)
+			Y_prob = clf.decision_function(X_test)
 			predicted_probability.append(Y_prob)
 		true_label.append(list(Y_test.values.flat))
 
