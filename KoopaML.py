@@ -685,7 +685,7 @@ class FinalModelAndHyperparameterResults(luigi.Task):
 			except:
 				self.calibrated_clf.fit(X,Y.values.ravel().astype(int))
 		elif(calibration == 'sigmoid'):
-			if hasattr(clf, 'best_estimator_'):
+			if hasattr(self.clf, 'best_estimator_'):
 				self.calibrated_clf = sk_cal.CalibratedClassifierCV(self.clf.best_estimator_, method='sigmoid', cv=10)
 			else:
 				self.calibrated_clf = sk_cal.CalibratedClassifierCV(self.clf, method='sigmoid', cv=10)
