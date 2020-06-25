@@ -325,7 +325,7 @@ class ExternalValidationRefittedRS(luigi.Task):
 		setupLog(self.__class__.__name__)
 		df_input = pd.read_pickle(self.input()['df']["pickle"].path)
 		label = WF_info[self.wf_name]["label_name"]
-		with open(self.input()["feature_oddratio"].path, 'rb') as f:
+		with open(self.input()["feature_oddratio"]['pickle'].path, 'rb') as f:
 			feature_oddratio_dict=pickle.load(f)
 
 
