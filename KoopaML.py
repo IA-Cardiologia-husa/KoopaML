@@ -329,7 +329,7 @@ class ExternalValidationRefittedRS(luigi.Task):
 			feature_oddratio_dict=pickle.load(f)
 
 
-		tl_pp_dict = external_validation_RS(df_input, label, feature_oddratio)
+		tl_pp_dict = external_validation_RS(df_input, label, feature_oddratio_dict)
 
 		with open(self.output().path, 'wb') as f:
 			# Pickle the 'data' dictionary using the highest protocol available.
