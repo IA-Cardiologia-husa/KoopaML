@@ -474,7 +474,11 @@ def group_files_analyze(task_requires, clf_name):
 		variance = (auc*(1-auc)+(m-1)*(pxxy-auc**2)+(n-1)*(pxyy-auc**2))/(m*n)
 		std_error_aucroc = np.sqrt(variance)
 		c=1
-		std_error_aucpr = 1e100
+		auc = pooling_aucpr
+		pxxy = auc/(2-auc)
+		pxyy = 2*auc**2/(1+auc)
+		variance = (auc*(1-auc)+(m-1)*(pxxy-auc**2)+(n-1)*(pxyy-auc**2))/(m*n)
+		std_error_aucpr = np.sqrt(variance)
 
 	print('Pooling AUC ROC:', pooling_aucroc)
 	print('Averaging AUC ROC:', averaging_aucroc)
