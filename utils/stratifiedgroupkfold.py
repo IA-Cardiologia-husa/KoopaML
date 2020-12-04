@@ -5,7 +5,8 @@ from sklearn.utils import indexable, check_random_state, safe_indexing
 from sklearn.utils.validation import _num_samples, column_or_1d
 from sklearn.utils.validation import check_array
 from sklearn.utils.multiclass import type_of_target
-from sklearn.utils.fixes import comb
+# from sklearn.utils.fixes import comb
+from scipy.special import comb
 
 import numpy as np
 
