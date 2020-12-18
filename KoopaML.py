@@ -573,7 +573,7 @@ class ConfidenceIntervalHanleyRS(luigi.Task):
 	def requires(self):
 		if (self.ext_val == 'No'):
 			return FilterPreprocessDatabase(self.wf_name)
-		elif (self.ext_val == 'Si'):
+		elif (self.ext_val == 'Yes'):
 			return FilterPreprocessExternalDatabase(self.wf_name)
 
 	def run(self):
