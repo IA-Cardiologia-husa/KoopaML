@@ -210,7 +210,7 @@ def predict_groupkfold_ML(data, label, features, group_label, cv_type, clf, cali
 		gkf = StratifiedGroupKFold(cvfolds, random_state=seed, shuffle=True)
 	elif (cv_type == 'groupkfold'):
 		X, Y, G = sk_u.shuffle(X,Y,G, random_state=seed)
-		gkf = GroupKFold(cvfolds)
+		gkf = sk_ms.GroupKFold(cvfolds)
 	else:
 		raise('incompatible crossvalidation type')
 
@@ -284,7 +284,7 @@ def predict_groupkfold_RS(data, label, features, group_label, cv_type, feature_o
 		gkf = StratifiedGroupKFold(cvfolds, random_state=seed, shuffle=True)
 	elif (cv_type == 'groupkfold'):
 		X, Y, G = sk_u.shuffle(X,Y,G, random_state=seed)
-		gkf = GroupKFold(cvfolds)
+		gkf = sk_ms.GroupKFold(cvfolds)
 	else:
 		raise('incompatible crossvalidation type')
 
@@ -349,7 +349,7 @@ def predict_groupkfold_refitted_RS(data, label, features, group_label, cv_type, 
 		gkf = StratifiedGroupKFold(cvfolds, random_state=seed, shuffle=True)
 	elif (cv_type == 'groupkfold'):
 		X, Y, G = sk_u.shuffle(X,Y,G, random_state=seed)
-		gkf = GroupKFold(cvfolds)
+		gkf = sk_ms.GroupKFold(cvfolds)
 	else:
 		raise('incompatible crossvalidation type')
 
