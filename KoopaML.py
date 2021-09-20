@@ -117,7 +117,7 @@ class ProcessDatabase(luigi.Task):
 		except:
 			pass
 		return {"pickle": luigi.LocalTarget(os.path.join(tmp_path,self.__class__.__name__, "df_processed.pickle")),
-				"xls": luigi.LocalTarget(os.path.join(tmp_path,self.__class__.__name__, "df_processed.xls"))}
+				"xls": luigi.LocalTarget(os.path.join(tmp_path,self.__class__.__name__, "df_processed.xlsx"))}
 
 class FillnaDatabase(luigi.Task):
 	def requires(self):
@@ -139,7 +139,7 @@ class FillnaDatabase(luigi.Task):
 		except:
 			pass
 		return {"pickle": luigi.LocalTarget(os.path.join(tmp_path,self.__class__.__name__, "df_fillna.pickle")),
-				"xls": luigi.LocalTarget(os.path.join(tmp_path,self.__class__.__name__, "df_fillna.xls"))}
+				"xls": luigi.LocalTarget(os.path.join(tmp_path,self.__class__.__name__, "df_fillna.xlsx"))}
 
 class FilterPreprocessDatabase(luigi.Task):
 	wf_name = luigi.Parameter()
@@ -165,7 +165,7 @@ class FilterPreprocessDatabase(luigi.Task):
 		except:
 			pass
 		return {"pickle": luigi.LocalTarget(os.path.join(tmp_path,self.__class__.__name__, f"df_filtered_preprocessed_{self.wf_name}.pickle")),
-				"xls": luigi.LocalTarget(os.path.join(tmp_path,self.__class__.__name__, f"df_filtered_preprocessed_{self.wf_name}.xls"))}
+				"xls": luigi.LocalTarget(os.path.join(tmp_path,self.__class__.__name__, f"df_filtered_preprocessed_{self.wf_name}.xlsx"))}
 
 class CleanExternalDatabase(luigi.Task):
 	def run(self):
@@ -206,7 +206,7 @@ class ProcessExternalDatabase(luigi.Task):
 		except:
 			pass
 		return {"pickle": luigi.LocalTarget(os.path.join(tmp_path,self.__class__.__name__, "external_df_processed.pickle")),
-				"xls": luigi.LocalTarget(os.path.join(tmp_path,self.__class__.__name__, "external_df_processed.xls"))}
+				"xls": luigi.LocalTarget(os.path.join(tmp_path,self.__class__.__name__, "external_df_processed.xlsx"))}
 
 class FillnaExternalDatabase(luigi.Task):
 	def requires(self):
@@ -228,7 +228,7 @@ class FillnaExternalDatabase(luigi.Task):
 		except:
 			pass
 		return {"pickle": luigi.LocalTarget(os.path.join(tmp_path,self.__class__.__name__, "external_df_fillna.pickle")),
-				"xls": luigi.LocalTarget(os.path.join(tmp_path,self.__class__.__name__, "external_df_fillna.xls"))}
+				"xls": luigi.LocalTarget(os.path.join(tmp_path,self.__class__.__name__, "external_df_fillna.xlsx"))}
 
 class FilterPreprocessExternalDatabase(luigi.Task):
 	wf_name = luigi.Parameter()
@@ -254,7 +254,7 @@ class FilterPreprocessExternalDatabase(luigi.Task):
 		except:
 			pass
 		return {"pickle": luigi.LocalTarget(os.path.join(tmp_path,self.__class__.__name__, f"external_df_filtered_preprocessed_{self.wf_name}.pickle")),
-				"xls": luigi.LocalTarget(os.path.join(tmp_path,self.__class__.__name__, f"external_df_filtered_preprocessed_{self.wf_name}.xls"))}
+				"xls": luigi.LocalTarget(os.path.join(tmp_path,self.__class__.__name__, f"external_df_filtered_preprocessed_{self.wf_name}.xlsx"))}
 
 class ExternalValidation(luigi.Task):
 	clf_name = luigi.Parameter()
