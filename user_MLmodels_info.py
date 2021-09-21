@@ -24,11 +24,16 @@ ML_info['BT'] = {'formal_name': 'XGBoost',
 					'clf': xgb.XGBClassifier(n_estimators=1000)}
 ML_info['LR'] = {'formal_name': 'Logistic Regression',
 					'clf': sk_lm.LogisticRegression()}
+# ML_info['polyLR'] = {'formal_name': 'PolyFeatures LR',
+# 					'clf': sk_pl.Pipeline(steps=[('polyf',sk_pre.PolynomialFeatures(degree=3, include_bias=False)),
+#                              ('lr', sk_lm.LogisticRegression(penalty='l2',C=1, max_iter=10000))]),
+# 					'calibration':None}
 
-pipeline_rf = sk_pl.Pipeline(steps=[("fs",FeatureSelecter()),("rf",sk_en.RandomForestClassifier(n_estimators = 1000,  max_features = 'auto'))])
-grid_params_rf=[{'fs__method':['eq','sfm_rf', 'skb_10'],'rf__n_estimators':[100,1000],
-					'rf__max_features':[1,'auto'], 'rf__criterion':['gini','entropy'], 'rf__max_depth':[None, 1,2,5]}]
-tuned_rf=sk_ms.GridSearchCV(pipeline_rf,grid_params_rf, cv=10,scoring ='roc_auc', return_train_score=False, verbose=1)
 
-ML_info['RF_pipeline'] = {'formal_name': 'Random Forest (Hyperparameter Tuning)',
-						  'clf': tuned_rf}
+# pipeline_rf = sk_pl.Pipeline(steps=[("fs",FeatureSelecter()),("rf",sk_en.RandomForestClassifier(n_estimators = 1000,  max_features = 'auto'))])
+# grid_params_rf=[{'fs__method':['eq','sfm_rf', 'skb_10'],'rf__n_estimators':[100,1000],
+# 					'rf__max_features':[1,'auto'], 'rf__criterion':['gini','entropy'], 'rf__max_depth':[None, 1,2,5]}]
+# tuned_rf=sk_ms.GridSearchCV(pipeline_rf,grid_params_rf, cv=10,scoring ='roc_auc', return_train_score=False, verbose=1)
+#
+# ML_info['RF_pipeline'] = {'formal_name': 'Random Forest (Hyperparameter Tuning)',
+# 						  'clf': tuned_rf}
