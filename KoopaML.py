@@ -170,10 +170,29 @@ class FilterPreprocessDatabase(luigi.Task):
 		return {"pickle": luigi.LocalTarget(os.path.join(tmp_path,self.__class__.__name__, f"df_filtered_preprocessed_{self.wf_name}.pickle")),
 				"xls": luigi.LocalTarget(os.path.join(tmp_path,self.__class__.__name__, f"df_filtered_preprocessed_{self.wf_name}.xlsx"))}
 
-class CleanExternalDatabase(luigi.Task):
+class LoadExternalDatabase(luigi.Task):
 	def run(self):
 		setupLog(self.__class__.__name__)
 		df_input = load_external_database()
+		df_input.to_pickle(self.output()["pickle"].path)
+		writer = pd.ExcelWriter(self.output()["xls"].path, engine='xlsxwriter')
+		df_input.to_excel(writer, sheet_name='Sheet1')
+		writer.save()
+
+	def output(self):
+		try:
+			os.makedirs(os.path.join(tmp_path,self.__class__.__name__))
+		except:
+			pass
+		return {"pickle": luigi.LocalTarget(os.path.join(tmp_path,self.__class__.__name__, "external_df_loaded.pickle")),
+				"xls": luigi.LocalTarget(os.path.join(tmp_path,self.__class__.__name__, "external_df_loaded.xlsx"))}
+
+class CleanExternalDatabase(luigi.Task):
+	def requires(self):
+		return LoadDatabase()
+	def run(self):
+		setupLog(self.__class__.__name__)
+		df_input = pd.read_pickle(self.input()["pickle"].path)
 		df_output = clean_external_database(df_input)
 		df_output.to_pickle(self.output()["pickle"].path)
 		writer = pd.ExcelWriter(self.output()["xls"].path, engine='xlsxwriter')
@@ -264,31 +283,32 @@ class ExternalValidation(luigi.Task):
 	wf_name = luigi.Parameter()
 
 	def requires(self):
-		return {'external_data': FilterPreprocessExternalDatabase(self.wf_name),
-				'unfiltered_data': FillnaExternalDatabase(),
+		return {'data': FillnaExternalDatabase(),
 				'clf': FinalModelAndHyperparameterResults(wf_name = self.wf_name, clf_name = self.clf_name)
 				}
 
 	def run(self):
 		setupLog(self.__class__.__name__)
-		df_input = pd.read_pickle(self.input()["external_data"]["pickle"].path)
+		df_input = pd.read_pickle(self.input()["data"]["pickle"].path)
 		features = WF_info[self.wf_name]["feature_list"]
 		label = WF_info[self.wf_name]["label_name"]
 		with open(self.input()["clf"].path, 'rb') as f:
 			clf = pickle.load(f)
 
-		tl_pp_dict = external_validation(df_input, label, features, clf)
+		X = external_data.loc[:,features]
+		Y = external_data.loc[:,[label]]
+		Y_prob = clf.predict_proba(X)[:,1]
 
-		with open(self.output().path, 'wb') as f:
-			# Pickle the 'data' dictionary using the highest protocol available.
-			pickle.dump(tl_pp_dict, f, pickle.HIGHEST_PROTOCOL)
+		X['True Label'] = Y
+		X = Y_prob
+		X.to_excel(self.output().path)
 
 	def output(self):
 		try:
 			os.makedirs(os.path.join(tmp_path,self.__class__.__name__))
 		except:
 			pass
-		return luigi.LocalTarget(os.path.join(tmp_path,self.__class__.__name__,f"ExternalValidation_PredProb_{self.wf_name}_{self.clf_name}.dict"))
+		return luigi.LocalTarget(os.path.join(tmp_path,self.__class__.__name__,f"ExternalValidation_PredProb_{self.wf_name}_{self.clf_name}.xlsx"))
 
 class ExternalValidationRS(luigi.Task):
 	score_name = luigi.Parameter()
@@ -345,6 +365,97 @@ class ExternalValidationRefittedRS(luigi.Task):
 			pass
 		return luigi.LocalTarget(os.path.join(tmp_path,self.__class__.__name__,f"ExternalValidation_PredProb_{self.wf_name}_{self.score_name}.dict"))
 
+class CreateFolds(luigi.Task):
+	seed = luigi.IntParameter()
+	wf_name = luigi.Parameter()
+
+	def requires(self):
+		return FillnaDatabase()
+
+	def run(self):
+		setupLog(self.__class__.__name__)
+
+		filter_function = WF_info[self.wf_name]["filter_function"]
+		features = WF_info[self.wf_name]["feature_list"]
+		label = WF_info[self.wf_name]["label_name"]
+		group_label = WF_info[self.wf_name]["group_label"]
+		cv_type = WF_info[self.wf_name]["validation_type"]
+		folds = WF_info[self.wf_name]["cv_folds"]
+
+		df_input = pd.read_pickle(self.input()["pickle"].path)
+
+		if(self.cv_type == 'kfold'):
+			data = filter_function(df_input)
+			X = data.loc[:,features]
+			Y = data.loc[:,[label]].astype(bool)
+			kf = sk_ms.KFold(self.cv_folds, random_state=self.seed, shuffle=True)
+			i=0
+			for train_index, test_index in kf.split(X,Y):
+				data_train, data_test = data.iloc[train_index], data.iloc[test_index]
+				data_train.to_excel(self.output()[f'Train_{i}'].path)
+				data_test.to_excel(self.output()[f'Test_{i}'].path)
+				i+=1
+		elif(self.cv_type == 'unfilteredkfold'):
+			data = df_input
+			X = data.loc[:,features]
+			Y = data.loc[:,[label]].astype(bool)
+			kf = sk_ms.KFold(self.cv_folds, random_state=self.seed, shuffle=True)
+			i=0
+			for train_index, test_index in kf.split(X,Y):
+				data_train, data_test = data.iloc[train_index], data.iloc[test_index]
+				data_train.to_excel(self.output()[f'Train_{i}'].path)
+				data_test.to_excel(self.output()[f'Test_{i}'].path)
+				i+=1
+		elif(self.cv_type == 'stratifiedkfold'):
+			data = filter_function(df_input)
+			X = data.loc[:,features]
+			Y = data.loc[:,[label]].astype(bool)
+			skf = sk_ms.StratifiedKFold(self.cv_folds, random_state=self.seed, shuffle=True)
+			i=0
+			for train_index, test_index in skf.split(X,Y):
+				data_train, data_test = data.iloc[train_index], data.iloc[test_index]
+				data_train.to_excel(self.output()[f'Train_{i}'].path)
+				data_test.to_excel(self.output()[f'Test_{i}'].path)
+				i+=1
+		elif (cv_type == 'groupkfold'):
+			data = filter_function(df_input)
+			X = data.loc[:,features]
+			Y = data.loc[:,[label]].astype(bool)
+			G = data.loc[:, group_label]
+			X, Y, G = sk_u.shuffle(X,Y,G, random_state=self.seed)
+			gkf = sk_ms.GroupKFold(self.cv_folds)
+			i=0
+			for train_index, test_index in gkf.split(X,Y,G):
+				data_train, data_test = data.iloc[train_index], data.iloc[test_index]
+				data_train.to_excel(self.output()[f'Train_{i}'].path)
+				data_test.to_excel(self.output()[f'Test_{i}'].path)
+				i+=1
+		elif (cv_type == 'stratifiedgroupkfold'):
+			data = filter_function(df_input)
+			X = data.loc[:,features]
+			Y = data.loc[:,[label]].astype(bool)
+			G = data.loc[:, group_label]
+			sgkf = StratifiedGroupKFold(self.cv_folds, random_state=self.seed, shuffle=True)
+			i=0
+			for train_index, test_index in sgkf.split(X,Y,G):
+				data_train, data_test = data.iloc[train_index], data.iloc[test_index]
+				data_train.to_excel(self.output()[f'Train_{i}'].path)
+				data_test.to_excel(self.output()[f'Test_{i}'].path)
+				i+=1
+		else:
+			raise('incompatible crossvalidation type')
+
+	def output(self):
+		try:
+			os.makedirs(os.path.join(tmp_path,self.__class__.__name__,self.wf_name,f"RepetitionNo{self.seed:03d}"))
+		except:
+			pass
+		dic = {}
+		for i in range(WF_info[self.wf_name]["cv_folds"]):
+			dic[f"Train_{i}"] = luigi.LocalTarget(os.path.join(tmp_path,self.__class__.__name__,self.wf_name,f"RepetitionNo{self.seed:03d}",f"Train_Fold_{i:02d}.xlsx"))
+			dic[f"Test_{i}"] = luigi.LocalTarget(os.path.join(tmp_path,self.__class__.__name__,self.wf_name,f"RepetitionNo{self.seed:03d}",f"Test_Fold_{i:02d}.xlsx"))
+		return dic
+
 class CalculateKFold(luigi.Task):
 
 	seed = luigi.IntParameter()
@@ -352,14 +463,11 @@ class CalculateKFold(luigi.Task):
 	wf_name = luigi.Parameter()
 
 	def requires(self):
-		return {'data':FilterPreprocessDatabase(self.wf_name),
-				'unfiltered_data': FillnaDatabase()}
+		return CreateFolds(seed=self.seed, wf_name = self.wf_name)
 
 	def run(self):
 		setupLog(self.__class__.__name__)
 
-		df_input = pd.read_pickle(self.input()["unfiltered_data"]["pickle"].path)
-		df_filtered = pd.read_pickle(self.input()["data"]["pickle"].path)
 		filter_function = WF_info[self.wf_name]["filter_function"]
 		features = WF_info[self.wf_name]["feature_list"]
 		label = WF_info[self.wf_name]["label_name"]
@@ -378,16 +486,90 @@ class CalculateKFold(luigi.Task):
 		else:
 			raise('cv_type not recognized')
 
-		with open(self.output().path, 'wb') as f:
-			# Pickle the 'data' dictionary using the highest protocol available.
-			pickle.dump(tl_pp_dict, f, pickle.HIGHEST_PROTOCOL)
+		for i in range(folds):
+			df_train = pd.read_excel(self.input()[f'Train_{i}'].path)
+			df_test = pd.read_excel(self.input()[f'Test_{i}'].path)
+			X_train, X_test = df_train.loc[:,features], df_test.loc[:,features]
+			Y_train, Y_test = df_train.loc[:,[label]].astype(bool), df_test.loc[:,[label]].astype(bool)
+			if ((cv_type == 'groupkfold') or (cv_type=='stratifiedgroupkfold')):
+				G_train, G_test = df_train.loc[:,group_label], df_test.loc[:,group_label]
+
+			if (calibration is None):
+				try:
+					clf.fit(X_train, Y_train.values.ravel().astype(int), groups=G_train)
+				except:
+					clf.fit(X_train, Y_train.values.ravel().astype(int))
+				calibrated_clf = clf
+			else:
+				if hasattr(clf, 'best_estimator_'):
+					try:
+						clf.fit(X_train, Y_train.values.ravel().astype(int), groups=G_train)
+					except:
+						clf.fit(X_train, Y_train.values.ravel().astype(int))
+					if(calibration == 'isotonic'):
+						calibrated_clf  = sk_cal.CalibratedClassifierCV(clf.best_estimator_, method='isotonic', cv=10)
+						try:
+							calibrated_clf.fit(X_train, Y_train.values.ravel().astype(int), groups=G_train)
+						except:
+							calibrated_clf.fit(X_train, Y_train.values.ravel().astype(int))
+					elif(calibration == 'sigmoid'):
+						calibrated_clf  = sk_cal.CalibratedClassifierCV(clf.best_estimator_, method='sigmoid', cv=10)
+						try:
+							calibrated_clf.fit(X_train, Y_train.values.ravel().astype(int), groups=G_train)
+						except:
+							calibrated_clf.fit(X_train, Y_train.values.ravel().astype(int))
+					else:
+						print('Unknown Calibration type')
+						raise
+				else:
+					if(calibration == 'isotonic'):
+						calibrated_clf  = sk_cal.CalibratedClassifierCV(clf, method='isotonic', cv=10)
+						try:
+							calibrated_clf.fit(X_train, Y_train.values.ravel().astype(int), groups=G_train)
+						except:
+							calibrated_clf.fit(X_train, Y_train.values.ravel().astype(int))
+					elif(calibration == 'sigmoid'):
+						calibrated_clf  = sk_cal.CalibratedClassifierCV(clf, method='sigmoid', cv=10)
+						try:
+							calibrated_clf.fit(X_train, Y_train.values.ravel().astype(int), groups=G_train)
+						except:
+							calibrated_clf.fit(X_train, Y_train.values.ravel().astype(int))
+			try:
+				Y_prob_test = calibrated_clf.predict_proba(X_test)[:,1]
+				Y_prob_train = calibrated_clf.predict_proba(X_train)[:,1]
+			except:
+				Y_prob_test = calibrated_clf.decision_function(X_test)
+				Y_prob_train = calibrated_clf.decision_function(X_train)
+			true_label_test = Y_test.values.flat
+			if ((cv_type == 'groupkfold') or (cv_type=='stratifiedgroupkfold')):
+				X_train[f'Group_label: {group_label}'] = G_train
+				X_test[f'Group_label: {group_label}'] = G_test
+			X_train['Repetition'] = self.seed
+			X_test['Repetition'] = self.seed
+			X_train['Fold'] = i
+			X_test['Fold'] = i
+			X_train['True Label'] = Y_train
+			X_test['True Label'] = Y_test
+			X_train['Predicted Probability'] = Y_prob_train
+			X_test['Predicted Probability'] = Y_prob_test
+
+			X_train.to_excel(self.output()[f"Train_{i}"].path)
+			X_test.to_excel(self.output()[f"Test_{i}"].path)
+
+			with open(self.output().path[f"Model_{i}"],'wb') as f:
+				pickle.dump(calibrated_clf, f, pickle.HIGHEST_PROTOCOL)
 
 	def output(self):
 		try:
 			os.makedirs(os.path.join(tmp_path,self.__class__.__name__,self.wf_name,self.clf_name))
 		except:
 			pass
-		return luigi.LocalTarget(os.path.join(tmp_path,self.__class__.__name__,self.wf_name,self.clf_name,f"TrueLabel_PredProb_{self.seed}.dict"))
+		dic = {}
+		for i in range(WF_info[self.wf_name]["cv_folds"]):
+			dic[f"Train_{i}"] = luigi.LocalTarget(os.path.join(tmp_path,self.__class__.__name__,self.wf_name,self.clf_name,f"RepetitionNo{self.seed:03d}",f"Train_Results_{i:02d}.xlsx"))
+			dic[f"Test_{i}"] = luigi.LocalTarget(os.path.join(tmp_path,self.__class__.__name__,self.wf_name,self.clf_name,f"RepetitionNo{self.seed:03d}",f"Test_Results_{i:02d}.xlsx"))
+			dic[f"Model_{i}"] = luigi.LocalTarget(os.path.join(tmp_path,self.__class__.__name__,self.wf_name,self.clf_name,f"RepetitionNo{self.seed:03d}",f"{self.clf_name}_r{self.seed}_f{i}.pickle"))
+		return dic
 
 class RiskScore_KFold(luigi.Task):
 
@@ -396,85 +578,78 @@ class RiskScore_KFold(luigi.Task):
 	wf_name = luigi.Parameter()
 
 	def requires(self):
-		return {'data':FilterPreprocessDatabase(self.wf_name),
-				'unfiltered_data': FillnaDatabase()}
+		return CreateFolds(seed=self.seed, wf_name = self.wf_name)
 
 	def run(self):
 		setupLog(self.__class__.__name__)
 
-		df_input = pd.read_pickle(self.input()["unfiltered_data"]["pickle"].path)
-		df_filtered = pd.read_pickle(self.input()["data"]["pickle"].path)
 		label = WF_info[self.wf_name]["label_name"]
-		filter_function = WF_info[self.wf_name]["filter_function"]
-		features = WF_info[self.wf_name]["feature_list"]
-		group_label = WF_info[self.wf_name]["group_label"]
-		cv_type = WF_info[self.wf_name]["validation_type"]
 		folds = WF_info[self.wf_name]["cv_folds"]
 		feature_oddratio_dict = RS_info[self.score_name]["feature_oddratio"]
 
-		if ((cv_type == 'kfold') or (cv_type=='stratifiedkfold')):
-			tl_pp_dict = predict_kfold_RS(df_filtered, label, features, cv_type, feature_oddratio_dict, self.seed, folds)
-		elif ((cv_type == 'groupkfold') or (cv_type=='stratifiedgroupkfold')):
-			tl_pp_dict = predict_groupkfold_RS(df_filtered, label, features, group_label, cv_type, feature_oddratio_dict,  self.seed, folds)
-		elif (cv_type == 'unfilteredkfold'):
-			tl_pp_dict = predict_filter_kfold_RS(df_input, label, features, filter_function, feature_oddratio_dict,  self.seed, folds)
-		else:
-			raise('cv_type not recognized')
+		for i in range(folds):
+			df_test = pd.read_excel(self.input()[f'Test_{i}'].path)
 
+			Y_prob = pd.Series(0, index=df_test.index)
+			for feat in feature_oddratio.keys():
+				Y_prob += feature_oddratio[feat]*df_test.loc[:,feat]
 
-		with open(self.output().path, 'wb') as f:
-			# Pickle the 'data' dictionary using the highest protocol available.
-			pickle.dump(tl_pp_dict, f, pickle.HIGHEST_PROTOCOL)
+			df_test['True Label'] = df_test[label]
+			df_test['Predicted Probability'] = Y_prob
+			df_test.to_excel(self.output()[f"Test_{i}"].path)
 
 	def output(self):
 		try:
-			os.makedirs(os.path.join(tmp_path,self.__class__.__name__, self.wf_name, self.score_name))
+			os.makedirs(os.path.join(tmp_path,self.__class__.__name__,self.wf_name,self.clf_name))
 		except:
 			pass
-		return luigi.LocalTarget(os.path.join(tmp_path,self.__class__.__name__, self.wf_name, self.score_name, f"TrueLabel_PredProb_{self.seed}.dict"))
+		dic = {}
+		for i in range(WF_info[self.wf_name]["cv_folds"]):
+			dic[f"Test_{i}"] = luigi.LocalTarget(os.path.join(tmp_path,self.__class__.__name__,self.wf_name,self.clf_name,f"RepetitionNo{self.seed:03d}",f"Test_Results_{i:02d}.xlsx"))
+		return dic
 
-class RefittedRiskScore_KFold(luigi.Task):
-	seed = luigi.IntParameter()
-	score_name = luigi.Parameter()
-	wf_name = luigi.Parameter()
-
-	def requires(self):
-		return {'data':FilterPreprocessDatabase(self.wf_name),
-				'unfiltered_data': FillnaDatabase()}
-
-	def run(self):
-		setupLog(self.__class__.__name__)
-
-		df_input = pd.read_pickle(self.input()["unfiltered_data"]["pickle"].path)
-		df_filtered = pd.read_pickle(self.input()["data"]["pickle"].path)
-		label = WF_info[self.wf_name]["label_name"]
-		filter_function = WF_info[self.wf_name]["filter_function"]
-		features = WF_info[self.wf_name]["feature_list"]
-		group_label = WF_info[self.wf_name]["group_label"]
-		cv_type = WF_info[self.wf_name]["validation_type"]
-		folds = WF_info[self.wf_name]["cv_folds"]
-		feature_oddratio_dict = RS_info[self.score_name]["feature_oddratio"]
-
-		if ((cv_type == 'kfold') or (cv_type=='stratifiedkfold')):
-			tl_pp_dict = predict_kfold_refitted_RS(df_filtered, label, features, feature_oddratio_dict,  self.seed, folds)
-		elif ((cv_type == 'groupkfold') or (cv_type=='stratifiedgroupkfold')):
-			tl_pp_dict = predict_groupkfold_refitted_RS(df_filtered, label, features, group_label, cv_type, feature_oddratio_dict, self.seed, folds)
-		elif (cv_type == 'unfilteredkfold'):
-			tl_pp_dict = predict_filter_kfold_refitted_RS(df_input, label, features, filter_function, feature_oddratio_dict,  self.seed, folds)
-		else:
-			raise('cv_type not recognized')
-
-
-		with open(self.output().path, 'wb') as f:
-			# Pickle the 'data' dictionary using the highest protocol available.
-			pickle.dump(tl_pp_dict, f, pickle.HIGHEST_PROTOCOL)
-
-	def output(self):
-		try:
-			os.makedirs(os.path.join(tmp_path,self.__class__.__name__, self.wf_name, f'REFITTED_{self.score_name}'))
-		except:
-			pass
-		return luigi.LocalTarget(os.path.join(tmp_path,self.__class__.__name__, self.wf_name, f'REFITTED_{self.score_name}', f"TrueLabel_PredProb_{self.wf_name}_REFITTED_{self.score_name}_{self.seed}.dict"))
+# class RefittedRiskScore_KFold(luigi.Task):
+# 	seed = luigi.IntParameter()
+# 	score_name = luigi.Parameter()
+# 	wf_name = luigi.Parameter()
+#
+# 	def requires(self):
+# 		return {'data':FilterPreprocessDatabase(self.wf_name),
+# 				'unfiltered_data': FillnaDatabase()}
+#
+# 	def run(self):
+# 		setupLog(self.__class__.__name__)
+#
+# 		df_input = pd.read_pickle(self.input()["unfiltered_data"]["pickle"].path)
+# 		df_filtered = pd.read_pickle(self.input()["data"]["pickle"].path)
+# 		label = WF_info[self.wf_name]["label_name"]
+# 		filter_function = WF_info[self.wf_name]["filter_function"]
+# 		features = WF_info[self.wf_name]["feature_list"]
+# 		group_label = WF_info[self.wf_name]["group_label"]
+# 		cv_type = WF_info[self.wf_name]["validation_type"]
+# 		folds = WF_info[self.wf_name]["cv_folds"]
+# 		feature_oddratio_dict = RS_info[self.score_name]["feature_oddratio"]
+#
+# 		if ((cv_type == 'kfold') or (cv_type=='stratifiedkfold')):
+# 			tl_pp_dict = predict_kfold_refitted_RS(df_filtered, label, features, feature_oddratio_dict,  self.seed, folds)
+# 		elif ((cv_type == 'groupkfold') or (cv_type=='stratifiedgroupkfold')):
+# 			tl_pp_dict = predict_groupkfold_refitted_RS(df_filtered, label, features, group_label, cv_type, feature_oddratio_dict, self.seed, folds)
+# 		elif (cv_type == 'unfilteredkfold'):
+# 			tl_pp_dict = predict_filter_kfold_refitted_RS(df_input, label, features, filter_function, feature_oddratio_dict,  self.seed, folds)
+# 		else:
+# 			raise('cv_type not recognized')
+#
+#
+# 		with open(self.output().path, 'wb') as f:
+# 			# Pickle the 'data' dictionary using the highest protocol available.
+# 			pickle.dump(tl_pp_dict, f, pickle.HIGHEST_PROTOCOL)
+#
+# 	def output(self):
+# 		try:
+# 			os.makedirs(os.path.join(tmp_path,self.__class__.__name__, self.wf_name, f'REFITTED_{self.score_name}'))
+# 		except:
+# 			pass
+# 		return luigi.LocalTarget(os.path.join(tmp_path,self.__class__.__name__, self.wf_name, f'REFITTED_{self.score_name}', f"TrueLabel_PredProb_{self.wf_name}_REFITTED_{self.score_name}_{self.seed}.dict"))
 
 
 class Evaluate_ML(luigi.Task):
@@ -493,6 +668,15 @@ class Evaluate_ML(luigi.Task):
 	def run(self):
 		setupLog(self.__class__.__name__)
 
+		if (self.ext_val == 'No'):
+			df_aux = pd.read_excel(self.input()[0][f'Test_{0}'].path)
+			df = pd.DataFrame(columns = df_aux.columns)
+			for repetition in range(len(self.input())):
+				for fold in range(WF_info[self.wf_name]["cv_folds"]):
+					df_aux = pd.read_excel(self.input()[repetition][f'Test_{fold}'].path)
+					df = pd.concat(df, df_aux)
+		elif (self.ext_val == 'Yes'):
+			df = pd.read_excel(self.input().path)
 		(unfolded_pred_prob,unfolded_true_label, results_dict) = group_files_analyze(self.input(), self.clf_name)
 		with open(self.output()["pred_prob"].path, 'wb') as f:
 			# Pickle the 'data' dictionary using the highest protocol available.

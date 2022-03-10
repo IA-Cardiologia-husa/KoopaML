@@ -12,7 +12,8 @@ def process_database(df):
 	return df
 
 def fillna_database(df):
-	df=df.fillna(0)
+	# It is better to impute missing values on the model pipeline so that
+	# values are filled only with the training folds info during cross-validation
 	return df
 
 def preprocess_filtered_database(df, wf_name):
