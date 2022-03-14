@@ -1469,7 +1469,7 @@ class MDAFeatureImportances(luigi.Task):
 		elif self.ext_val == 'Yes':
 			# df_train = pd.read_excel(self.input()[rep][f"Train_{fold}"].path)
 			df_test = pd.read_excel(self.input()["data"].path)
-			with open(self.input()["model"].path, "rb") as f
+			with open(self.input()["model"].path, "rb") as f:
 				model = pickle.load(f)
 
 			for feat in feature_list:
