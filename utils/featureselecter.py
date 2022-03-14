@@ -21,7 +21,7 @@ import sklearn.model_selection as sk_ms
 import sklearn.feature_selection as sk_fs
 import xgboost as xgb
 from biofes import biplot, feature
-import eli5
+# import eli5
 
 
 class FeatureSelecter:
