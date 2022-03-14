@@ -580,6 +580,8 @@ class RiskScore_KFold(luigi.Task):
 		folds = WF_info[self.wf_name]["cv_folds"]
 		feature_oddratio_dict = RS_info[self.score_name]["feature_oddratio"]
 
+
+		#TODO Eliminate folds and repetitions here and afterwards, it does not make sense with risk scores
 		for i in range(folds):
 			df_test = pd.read_excel(self.input()[f'Test_{i}'].path)
 
@@ -589,6 +591,8 @@ class RiskScore_KFold(luigi.Task):
 
 			df_test['True Label'] = df_test[label].astype(int)
 			df_test['Predicted Probability'] = Y_prob
+			df_test['Repetition'] = self.seed
+			df_test['Fold'] = i
 			df_test.to_excel(self.output()[f"Test_{i}"].path)
 
 	def output(self):
@@ -703,6 +707,8 @@ class Evaluate_ML(luigi.Task):
 		averaging_sample_variance_aucpr = (aucpr_score2-aucpr_score**2/n_repfolds)/(n_repfolds-1)
 
 		if(n_folds>1):
+			critical_pvalue=0.05
+			c = sc_st.t.ppf(1-critical_pvalue/2, df= n_repfolds-1)
 			std_error_aucroc = np.sqrt(averaging_sample_variance_aucroc*(1/n_repfolds+1/(n_folds-1)))
 			std_error_aucpr = np.sqrt(averaging_sample_variance_aucpr*(1/n_repfolds+1/(n_folds-1)))
 		else:
@@ -772,9 +778,9 @@ class EvaluateRiskScore(luigi.Task):
 		else:
 			for i in range(WF_info[self.wf_name]['cv_repetitions']):
 				if(RS_info[self.score_name]['refit_oddratios'] == 'No'):
-					yield RiskScore_KFold(wf_name=self.wf_name, seed=i,score_name=self.score_name)
+					yield RiskScore_KFold(wf_name=self.wf_name, score_name=self.score_name)
 				elif(RS_info[self.score_name]['refit_oddratios'] == 'Yes'):
-					yield RefittedRiskScore_KFold(wf_name=self.wf_name, seed=i,score_name=self.score_name)
+					yield RefittedRiskScore_KFold(wf_name=self.wf_name, score_name=self.score_name)
 				else:
 					raise(f"invalid 'refit_or' value in score {score_name}")
 
@@ -795,7 +801,6 @@ class EvaluateRiskScore(luigi.Task):
 
 		n_reps = df['Repetition'].max()+1
 		n_folds = df['Fold'].max()+1
-		n_repfolds = n_reps*n_folds
 
 		for rep in range(n_reps):
 			for fold in range(n_folds):
