@@ -541,8 +541,8 @@ class CalculateKFold(luigi.Task):
 			X_test['Repetition'] = self.seed
 			X_train['Fold'] = i
 			X_test['Fold'] = i
-			X_train['True Label'] = Y_train
-			X_test['True Label'] = Y_test
+			X_train['True Label'] = Y_train.astype(int)
+			X_test['True Label'] = Y_test.astype(int)
 			X_train['Predicted Probability'] = Y_prob_train
 			X_test['Predicted Probability'] = Y_prob_test
 
@@ -587,7 +587,7 @@ class RiskScore_KFold(luigi.Task):
 			for feat in feature_oddratio.keys():
 				Y_prob += feature_oddratio[feat]*df_test.loc[:,feat]
 
-			df_test['True Label'] = df_test[label]
+			df_test['True Label'] = df_test[label].astype(int)
 			df_test['Predicted Probability'] = Y_prob
 			df_test.to_excel(self.output()[f"Test_{i}"].path)
 
@@ -766,7 +766,7 @@ class EvaluateRiskScore(luigi.Task):
 			else:
 				raise(f"invalid 'refit_or' value in score {score_name}")
 		else:
-			for i in range(1,WF_info[self.wf_name]['cv_repetitions']+1):
+			for i in range(WF_info[self.wf_name]['cv_repetitions']):
 				if(RS_info[self.score_name]['refit_oddratios'] == 'No'):
 					yield RiskScore_KFold(wf_name=self.wf_name, seed=i,score_name=self.score_name)
 				elif(RS_info[self.score_name]['refit_oddratios'] == 'Yes'):
