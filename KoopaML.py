@@ -1492,7 +1492,7 @@ class MDAFeatureImportances(luigi.Task):
 				mda2[feat] = mda2[feat]/(self.n_iterations)
 
 		# sorted_feats = sorted(feature_list, key= lambda x: mda[feat]/(np.sqrt(mda2[feat]-mda[feat]**2)+1e-14))
-		sorted_feats = sorted(feature_list, key= lambda x: mda[x])
+		sorted_feats = sorted(feature_list, key= lambda x: mda[x], reverse=True)
 
 		with open(self.output().path,'w') as f:
 			print(f"{'Feature':20.20} {'MDA':10.10} {'Variation':10.10} {'z-score':10.10}", file=f)
