@@ -1445,7 +1445,7 @@ class MDAFeatureImportances(luigi.Task):
 				for fold in range(WF_info[self.wf_name]["cv_folds"]):
 					# df_train = pd.read_excel(self.input()[rep][f"Train_{fold}"].path)
 					df_test = pd.read_excel(self.input()[rep][f"Test_{fold}"].path)
-					with open(self.input()[rep][f"Model_{fold}"].path, "rb") as f
+					with open(self.input()[rep][f"Model_{fold}"].path, "rb") as f:
 						model = pickle.load(f)
 
 					for feat in feature_list:
