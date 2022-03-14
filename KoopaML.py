@@ -655,7 +655,7 @@ class Evaluate_ML(luigi.Task):
 		if self.ext_val == 'Yes':
 			yield ExternalValidation(wf_name=self.wf_name,clf_name=self.clf_name)
 		else:
-			for i in range(1,WF_info[self.wf_name]['cv_repetitions']+1):
+			for i in range(WF_info[self.wf_name]['cv_repetitions']):
 				yield CalculateKFold(wf_name=self.wf_name, seed=i,clf_name=self.clf_name)
 
 	def run(self):
