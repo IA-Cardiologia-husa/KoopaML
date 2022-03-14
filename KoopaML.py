@@ -390,7 +390,7 @@ class CreateFolds(luigi.Task):
 			data = filter_function(df_input)
 			X = data.loc[:,features]
 			Y = data.loc[:,[label]].astype(bool)
-			kf = sk_ms.KFold(self.cv_folds, random_state=self.seed, shuffle=True)
+			kf = sk_ms.KFold(cv_folds, random_state=self.seed, shuffle=True)
 			i=0
 			for train_index, test_index in kf.split(X,Y):
 				data_train, data_test = data.iloc[train_index], data.iloc[test_index]
@@ -401,7 +401,7 @@ class CreateFolds(luigi.Task):
 			data = df_input
 			X = data.loc[:,features]
 			Y = data.loc[:,[label]].astype(bool)
-			kf = sk_ms.KFold(self.cv_folds, random_state=self.seed, shuffle=True)
+			kf = sk_ms.KFold(cv_folds, random_state=self.seed, shuffle=True)
 			i=0
 			for train_index, test_index in kf.split(X,Y):
 				data_train, data_test = data.iloc[train_index], data.iloc[test_index]
@@ -412,7 +412,7 @@ class CreateFolds(luigi.Task):
 			data = filter_function(df_input)
 			X = data.loc[:,features]
 			Y = data.loc[:,[label]].astype(bool)
-			skf = sk_ms.StratifiedKFold(self.cv_folds, random_state=self.seed, shuffle=True)
+			skf = sk_ms.StratifiedKFold(cv_folds, random_state=self.seed, shuffle=True)
 			i=0
 			for train_index, test_index in skf.split(X,Y):
 				data_train, data_test = data.iloc[train_index], data.iloc[test_index]
@@ -425,7 +425,7 @@ class CreateFolds(luigi.Task):
 			Y = data.loc[:,[label]].astype(bool)
 			G = data.loc[:, group_label]
 			X, Y, G = sk_u.shuffle(X,Y,G, random_state=self.seed)
-			gkf = sk_ms.GroupKFold(self.cv_folds)
+			gkf = sk_ms.GroupKFold(cv_folds)
 			i=0
 			for train_index, test_index in gkf.split(X,Y,G):
 				data_train, data_test = data.iloc[train_index], data.iloc[test_index]
@@ -437,7 +437,7 @@ class CreateFolds(luigi.Task):
 			X = data.loc[:,features]
 			Y = data.loc[:,[label]].astype(bool)
 			G = data.loc[:, group_label]
-			sgkf = sk_ms.StratifiedGroupKFold(self.cv_folds, random_state=self.seed, shuffle=True)
+			sgkf = sk_ms.StratifiedGroupKFold(cv_folds, random_state=self.seed, shuffle=True)
 			i=0
 			for train_index, test_index in sgkf.split(X,Y,G):
 				data_train, data_test = data.iloc[train_index], data.iloc[test_index]
@@ -864,9 +864,9 @@ class EvaluateRiskScore(luigi.Task):
 		except:
 			pass
 
-		return {"xls": luigi.LocalTarget(os.path.join(tmp_path,self.__class__.__name__,prefix+self.wf_name,f"Unfolded_df_{prefix}{self.clf_name}.xlsx")),
-				"auc_results": luigi.LocalTarget(os.path.join(tmp_path,self.__class__.__name__,prefix+self.wf_name,f"AUC_results_{prefix}{self.clf_name}.pickle")),
-				"auc_results_txt": luigi.LocalTarget(os.path.join(tmp_path,self.__class__.__name__,prefix+self.wf_name,f"AUC_results_{prefix}{self.clf_name}.txt"))}
+		return {"xls": luigi.LocalTarget(os.path.join(tmp_path,self.__class__.__name__,prefix+self.wf_name,f"Unfolded_df_{prefix}{self.scor_name}.xlsx")),
+				"auc_results": luigi.LocalTarget(os.path.join(tmp_path,self.__class__.__name__,prefix+self.wf_name,f"AUC_results_{prefix}{self.score_name}.pickle")),
+				"auc_results_txt": luigi.LocalTarget(os.path.join(tmp_path,self.__class__.__name__,prefix+self.wf_name,f"AUC_results_{prefix}{self.score_name}.txt"))}
 
 class ConfidenceIntervalHanleyRS(luigi.Task):
 	wf_name = luigi.Parameter()
