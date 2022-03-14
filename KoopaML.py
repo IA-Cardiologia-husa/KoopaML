@@ -1415,7 +1415,7 @@ class MDAFeatureImportances(luigi.Task):
 		# 	return {'df': FilterPreprocessExternalDatabase(self.wf_name),
 		# 			'clf': FinalModelAndHyperparameterResults(clf_name=self.clf_name, wf_name=self.wf_name)}
 		if self.ext_val == 'No':
-			for rep in WF_info[self.wf_name]["cv_repetitions"]:
+			for rep in range(WF_info[self.wf_name]["cv_repetitions"]):
 				yield CalculateKFold(clf_name = self.clf_name, wf_name = self.wf_name, seed = rep)
 		elif self.ext_val == 'Yes':
 			return {"model":FinalModelAndHyperparameterResults(wf_name = self.wf_name, clf_name = self.clf_name),
