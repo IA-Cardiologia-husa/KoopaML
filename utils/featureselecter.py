@@ -6,7 +6,7 @@ import sklearn.linear_model as sk_lm
 import sklearn.model_selection as sk_ms
 import sklearn.feature_selection as sk_fs
 import xgboost as xgb
-import eli5
+# import eli5
 
 
 import numpy as np
@@ -206,7 +206,7 @@ def random_fs(X,Y,n_vars,n_reps,clf):
 				var_times[var] += 1
 	sorted_vars = sorted(var_scores.keys(), key= lambda k: var_scores[k], reverse=True)
 
-	return sorted_vars[0:n_vars]				
+	return sorted_vars[0:n_vars]
 
 
 def chunkIt(seq, num):
