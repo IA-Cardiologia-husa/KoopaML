@@ -584,8 +584,8 @@ class RiskScore_KFold(luigi.Task):
 			df_test = pd.read_excel(self.input()[f'Test_{i}'].path)
 
 			Y_prob = pd.Series(0, index=df_test.index)
-			for feat in feature_oddratio.keys():
-				Y_prob += feature_oddratio[feat]*df_test.loc[:,feat]
+			for feat in feature_oddratio_dict.keys():
+				Y_prob += feature_oddratio_dict[feat]*df_test.loc[:,feat]
 
 			df_test['True Label'] = df_test[label].astype(int)
 			df_test['Predicted Probability'] = Y_prob
@@ -698,7 +698,7 @@ class Evaluate_ML(luigi.Task):
 		averaging_aucroc = aucroc_score/(n_repfolds)
 		averaging_sample_variance_aucroc = (aucroc_score2-aucroc_score**2/n_repfolds)/(n_repfolds-1)
 
-		pooling_aucpr = sk_m.average_precision_score(unfolded_true_label[~np.isnan(unfolded_true_label)].astype(bool),unfolded_pred_prob[~np.isnan(unfolded_true_label)])
+		pooling_aucpr = sk_m.average_precision_score(unfolded_true_label.loc[unfolded_true_label.notnull()].astype(bool),unfolded_pred_prob.loc[unfolded_true_label.notnull()])
 		averaging_aucpr = aucpr_score/n_repfolds
 		averaging_sample_variance_aucpr = (aucpr_score2-aucpr_score**2/n_repfolds)/(n_repfolds-1)
 
