@@ -667,7 +667,7 @@ class Evaluate_ML(luigi.Task):
 			for repetition in range(len(self.input())):
 				for fold in range(WF_info[self.wf_name]["cv_folds"]):
 					df_aux = pd.read_excel(self.input()[repetition][f'Test_{fold}'].path)
-					df = pd.concat(df, df_aux)
+					df = pd.concat([df, df_aux])
 		elif (self.ext_val == 'Yes'):
 			df = pd.read_excel(self.input().path)
 			df['Repetition'] = 0
@@ -783,7 +783,7 @@ class EvaluateRiskScore(luigi.Task):
 			for repetition in range(len(self.input())):
 				for fold in range(WF_info[self.wf_name]["cv_folds"]):
 					df_aux = pd.read_excel(self.input()[repetition][f'Test_{fold}'].path)
-					df = pd.concat(df, df_aux)
+					df = pd.concat([df, df_aux])
 		elif (self.ext_val == 'Yes'):
 			df = pd.read_excel(self.input().path)
 			df['Repetition'] = 0
