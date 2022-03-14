@@ -593,7 +593,7 @@ class RiskScore_KFold(luigi.Task):
 
 	def output(self):
 		try:
-			os.makedirs(os.path.join(tmp_path,self.__class__.__name__,self.wf_name,self.clf_name))
+			os.makedirs(os.path.join(tmp_path,self.__class__.__name__,self.wf_name,self.clf_name,f"RepetitionNo{self.seed:03d}"))
 		except:
 			pass
 		dic = {}
@@ -679,12 +679,12 @@ class Evaluate_ML(luigi.Task):
 
 		for rep in range(n_reps):
 			for fold in range(n_folds):
-				true_label = df.loc[(df['Repetition']==rep)&(df['Fold']==fold), "True Label"].values
-				pred_prob = df.loc[(df['Repetition']==rep)&(df['Fold']==fold), "Predicted Probability"].values
-				repfold_aucroc = sk_m.roc_auc_score(true_label[~np.isnan(true_label)].astype(bool),pred_prob[~np.isnan(true_label)])
+				true_label = df.loc[(df['Repetition']==rep)&(df['Fold']==fold), "True Label"]
+				pred_prob = df.loc[(df['Repetition']==rep)&(df['Fold']==fold), "Predicted Probability"]
+				repfold_aucroc = sk_m.roc_auc_score(true_label.loc[true_label.notnull()].astype(bool),pred_prob.loc[true_label.notnull()])
 				aucroc_score+=repfold_aucroc
 				aucroc_score2+=repfold_aucroc**2
-				repfold_aucpr = sk_m.average_precision_score(true_label[~np.isnan(true_label)].astype(bool),pred_prob[~np.isnan(true_label)])
+				repfold_aucpr = sk_m.average_precision_score(true_label.loc[true_label.notnull()].astype(bool),pred_prob.loc[true_label.notnull()])
 				aucpr_score+=repfold_aucpr
 				aucpr_score2+=repfold_aucpr**2
 
