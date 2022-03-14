@@ -593,12 +593,12 @@ class RiskScore_KFold(luigi.Task):
 
 	def output(self):
 		try:
-			os.makedirs(os.path.join(tmp_path,self.__class__.__name__,self.wf_name,self.clf_name,f"RepetitionNo{self.seed:03d}"))
+			os.makedirs(os.path.join(tmp_path,self.__class__.__name__,self.wf_name,self.score_name,f"RepetitionNo{self.seed:03d}"))
 		except:
 			pass
 		dic = {}
 		for i in range(WF_info[self.wf_name]["cv_folds"]):
-			dic[f"Test_{i}"] = luigi.LocalTarget(os.path.join(tmp_path,self.__class__.__name__,self.wf_name,self.clf_name,f"RepetitionNo{self.seed:03d}",f"Test_Results_{i:02d}.xlsx"))
+			dic[f"Test_{i}"] = luigi.LocalTarget(os.path.join(tmp_path,self.__class__.__name__,self.wf_name,self.score_name,f"RepetitionNo{self.seed:03d}",f"Test_Results_{i:02d}.xlsx"))
 		return dic
 
 # class RefittedRiskScore_KFold(luigi.Task):
