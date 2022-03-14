@@ -677,6 +677,10 @@ class Evaluate_ML(luigi.Task):
 		n_folds = df['Fold'].max()+1
 		n_repfolds = n_reps*n_folds
 
+		aucroc_score = 0
+		aucroc_score2 = 0
+		aucpr_score = 0
+		aucpr_score2 = 0
 		for rep in range(n_reps):
 			for fold in range(n_folds):
 				true_label = df.loc[(df['Repetition']==rep)&(df['Fold']==fold), "True Label"]
@@ -1482,12 +1486,13 @@ class MDAFeatureImportances(luigi.Task):
 				mda[feat] = mda[feat]/(self.n_iterations)
 				mda2[feat] = mda2[feat]/(self.n_iterations)
 
-		sorted_feats = sorted(feature_list, key= lambda x: mda[feat]/(np.sqrt(mda2[feat]-mda[feat]**2)+1e-14))
+		# sorted_feats = sorted(feature_list, key= lambda x: mda[feat]/(np.sqrt(mda2[feat]-mda[feat]**2)+1e-14))
+		sorted_feats = sorted(feature_list, key= lambda x: mda[feat])
 
 		with open(self.output().path,'w') as f:
-			print(f"{'Feature':20.20} {'MDA':10.10} {'Variation':10.10}", file=f)
+			print(f"{'Feature':20.20} {'MDA':10.10} {'Variation':10.10} {'z-score':10.10}", file=f)
 			for feat in sorted_feats:
-				print(f"{feat:20.20} {mda[feat]:0.4e} {np.sqrt(mda2[feat]-mda[feat]**2):0.4e}", file=f)
+				print(f"{feat:20.20} {mda[feat]:0.4e} {np.sqrt(mda2[feat]-mda[feat]**2):0.4e} {mda[feat]/(np.sqrt(mda2[feat]-mda[feat]**2)+1e-14):0.4e}", file=f)
 
 	def output(self):
 		try:
