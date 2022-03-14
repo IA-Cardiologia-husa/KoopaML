@@ -1441,9 +1441,9 @@ class MDAFeatureImportances(luigi.Task):
 
 					for feat in feature_list:
 						df_shuffled = df_test.copy()
-						true_label = df_shuffled["True Label"].values
-						pred_prob_original = df_shuffled["Predicted Probability"].values
-						aucroc_original = sk_m.roc_auc_score(true_label[~np.isnan(true_label)].astype(bool),pred_prob[~np.isnan(true_label)])
+						true_label = df_shuffled["True Label"]
+						pred_prob_original = df_shuffled["Predicted Probability"]
+						aucroc_original = sk_m.roc_auc_score(true_label.loc[true_label.notnull()].astype(bool),pred_prob_original.loc[true_label.notnull()])
 
 						for i in range(self.n_iterations):
 							df_shuffled[feat] = np.random.permutation(df_test[feat].values)
@@ -1451,7 +1451,7 @@ class MDAFeatureImportances(luigi.Task):
 								pred_prob = model.predict_proba(df_shuffled.loc[:, feature_list])[:,1]
 							except:
 								pred_prob = model.decision_function(df_shuffled.loc[:, feature_list])
-							aucroc_shuffled = sk_m.roc_auc_score(true_label[~np.isnan(true_label)].astype(bool),pred_prob[~np.isnan(true_label)])
+							aucroc_shuffled = sk_m.roc_auc_score(true_label.loc[true_label.notnull()].astype(bool),pred_prob.loc[true_label.notnull()])
 							mda[feat] += aucroc_original - aucroc_shuffled
 							mda2[feat] += (aucroc_original - aucroc_shuffled)**2
 			for feat in feature_list:
