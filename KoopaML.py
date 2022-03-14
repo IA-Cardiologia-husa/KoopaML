@@ -4,6 +4,8 @@ import pandas as pd
 import datetime as dt
 import pickle
 import sklearn.calibration as sk_cal
+import sklearn.metrics as sk_m
+import scipy.stats as sc_st
 import logging
 import sys
 
@@ -677,16 +679,72 @@ class Evaluate_ML(luigi.Task):
 					df = pd.concat(df, df_aux)
 		elif (self.ext_val == 'Yes'):
 			df = pd.read_excel(self.input().path)
-		(unfolded_pred_prob,unfolded_true_label, results_dict) = group_files_analyze(self.input(), self.clf_name)
-		with open(self.output()["pred_prob"].path, 'wb') as f:
-			# Pickle the 'data' dictionary using the highest protocol available.
-			pickle.dump(unfolded_pred_prob, f, pickle.HIGHEST_PROTOCOL)
-		with open(self.output()["true_label"].path, 'wb') as f:
-			# Pickle the 'data' dictionary using the highest protocol available.
-			pickle.dump(unfolded_true_label, f, pickle.HIGHEST_PROTOCOL)
+			df['Repetition'] = 0
+			df['Fold'] = 0
+
+		n_reps = df['Repetition'].max()+1
+		n_folds = df['Fold'].max()+1
+		n_repfolds = n_reps*n_folds
+
+		for rep in range(n_reps):
+			for fold in range(n_folds):
+				true_label = df.loc[(df['Repetition']==rep)&(df['fold']==fold)], "True Label"].values
+				pred_prob = df.loc[(df['Repetition']==rep)&(df['fold']==fold)], "Predicted Probability"].values
+				repfold_aucroc = sk_m.roc_auc_score(true_label[~np.isnan(true_label)].astype(bool),pred_prob[~np.isnan(true_label)])
+				aucroc_score+=repfold_aucroc
+				aucroc_score2+=repfold_aucroc**2
+				repfold_aucpr = sk_m.average_precision_score(true_label[~np.isnan(true_label)].astype(bool),pred_prob[~np.isnan(true_label)])
+				aucpr_score+=repfold_aucpr
+				aucpr_score2+=repfold_aucpr**2
+
+		unfolded_true_label = df.loc[:, "True Label"].values
+		unfolded_pred_prob = df.loc[:, "Predicted Probability"].values
+		pooling_aucroc = sk_m.roc_auc_score(unfolded_true_label[~np.isnan(unfolded_true_label)].astype(bool),unfolded_pred_prob[~np.isnan(unfolded_true_label)])
+		averaging_aucroc = aucroc_score/(n_repfolds)
+		averaging_sample_variance_aucroc = (aucroc_score2-aucroc_score**2/n_repfolds)/(n_repfolds-1)
+
+		pooling_aucpr = sk_m.average_precision_score(unfolded_true_label[~np.isnan(unfolded_true_label)].astype(bool),unfolded_pred_prob[~np.isnan(unfolded_true_label)])
+		averaging_aucpr = aucpr_score/n_repfolds
+		averaging_sample_variance_aucpr = (aucpr_score2-aucpr_score**2/n_repfolds)/(n_repfolds-1)
+
+		if(n_folds>1):
+			std_error_aucroc = np.sqrt(averaging_sample_variance_aucroc*(1/n_repfolds+1/(n_folds-1)))
+			std_error_aucpr = np.sqrt(averaging_sample_variance_aucpr*(1/n_repfolds+1/(n_folds-1)))
+		else:
+			m = (unfolded_true_label==0).sum()
+			n = (unfolded_true_label==1).sum()
+			auc = pooling_aucroc
+			pxxy = auc/(2-auc)
+			pxyy = 2*auc**2/(1+auc)
+			variance = (auc*(1-auc)+(m-1)*(pxxy-auc**2)+(n-1)*(pxyy-auc**2))/(m*n)
+			std_error_aucroc = np.sqrt(variance)
+			c=1
+			auc = pooling_aucpr
+			pxxy = auc/(2-auc)
+			pxyy = 2*auc**2/(1+auc)
+			variance = (auc*(1-auc)+(m-1)*(pxxy-auc**2)+(n-1)*(pxyy-auc**2))/(m*n)
+			std_error_aucpr = np.sqrt(variance)
+
+		results_dict = {"pool_aucroc": pooling_aucroc,
+						"avg_aucroc": averaging_aucroc,
+						"avg_aucroc_stderr": std_error_aucroc,
+						"aucroc_95ci_low": averaging_aucroc - c*std_error_aucroc,
+						"aucroc_95ci_high": averaging_aucroc+c*std_error_aucroc,
+						"pool_aucpr": pooling_aucpr,
+						"avg_aucpr": averaging_aucpr,
+						"avg_aucpr_stderr": std_error_aucpr,
+						"aucpr_95ci_low": averaging_aucpr - c*std_error_aucpr,
+						"aucpr_95ci_high": averaging_aucpr+c*std_error_aucpr}
+
+		df.to_excel(self.output()["xls"].path)
+
 		with open(self.output()["auc_results"].path, 'wb') as f:
 			# Pickle the 'data' dictionary using the highest protocol available.
 			pickle.dump(results_dict, f, pickle.HIGHEST_PROTOCOL)
+
+		with open(self.output()["auc_results_txt"].path, 'w') as f:
+			# Pickle the 'data' dictionary using the highest protocol available.
+			print(results_dict, file=f)
 
 
 	def output(self):
@@ -699,9 +757,9 @@ class Evaluate_ML(luigi.Task):
 		except:
 			pass
 
-		return {"pred_prob": luigi.LocalTarget(os.path.join(tmp_path,self.__class__.__name__,prefix+self.wf_name,f"Unfolded_Pred_Prob_{prefix}{self.clf_name}.pickle")),
-				"true_label": luigi.LocalTarget(os.path.join(tmp_path,self.__class__.__name__,prefix+self.wf_name,f"Unfolded_True_Label_{prefix}{self.clf_name}.pickle")),
-				"auc_results": luigi.LocalTarget(os.path.join(tmp_path,self.__class__.__name__,prefix+self.wf_name,f"AUC_results_{prefix}{self.clf_name}.pickle"))}
+		return {"xls": luigi.LocalTarget(os.path.join(tmp_path,self.__class__.__name__,prefix+self.wf_name,f"Unfolded_df_{prefix}{self.clf_name}.xlsx")),
+				"auc_results": luigi.LocalTarget(os.path.join(tmp_path,self.__class__.__name__,prefix+self.wf_name,f"AUC_results_{prefix}{self.clf_name}.pickle")),
+				"auc_results_txt": luigi.LocalTarget(os.path.join(tmp_path,self.__class__.__name__,prefix+self.wf_name,f"AUC_results_{prefix}{self.clf_name}.txt"))}
 
 class EvaluateRiskScore(luigi.Task):
 	wf_name = luigi.Parameter()
@@ -728,16 +786,82 @@ class EvaluateRiskScore(luigi.Task):
 	def run(self):
 		setupLog(self.__class__.__name__)
 
-		(unfolded_pred_prob,unfolded_true_label,results_dict) = group_files_analyze(self.input(), self.score_name)
-		with open(self.output()["pred_prob"].path, 'wb') as f:
-			# Pickle the 'data' dictionary using the highest protocol available.
-			pickle.dump(unfolded_pred_prob, f, pickle.HIGHEST_PROTOCOL)
-		with open(self.output()["true_label"].path, 'wb') as f:
-			# Pickle the 'data' dictionary using the highest protocol available.
-			pickle.dump(unfolded_true_label, f, pickle.HIGHEST_PROTOCOL)
+		if (self.ext_val == 'No'):
+			df_aux = pd.read_excel(self.input()[0][f'Test_{0}'].path)
+			df = pd.DataFrame(columns = df_aux.columns)
+			for repetition in range(len(self.input())):
+				for fold in range(WF_info[self.wf_name]["cv_folds"]):
+					df_aux = pd.read_excel(self.input()[repetition][f'Test_{fold}'].path)
+					df = pd.concat(df, df_aux)
+		elif (self.ext_val == 'Yes'):
+			df = pd.read_excel(self.input().path)
+			df['Repetition'] = 0
+			df['Fold'] = 0
+
+		n_reps = df['Repetition'].max()+1
+		n_folds = df['Fold'].max()+1
+		n_repfolds = n_reps*n_folds
+
+		for rep in range(n_reps):
+			for fold in range(n_folds):
+				true_label = df.loc[(df['Repetition']==rep)&(df['fold']==fold)], "True Label"].values
+				pred_prob = df.loc[(df['Repetition']==rep)&(df['fold']==fold)], "Predicted Probability"].values
+				repfold_aucroc = sk_m.roc_auc_score(true_label[~np.isnan(true_label)].astype(bool),pred_prob[~np.isnan(true_label)])
+				aucroc_score+=repfold_aucroc
+				aucroc_score2+=repfold_aucroc**2
+				repfold_aucpr = sk_m.average_precision_score(true_label[~np.isnan(true_label)].astype(bool),pred_prob[~np.isnan(true_label)])
+				aucpr_score+=repfold_aucpr
+				aucpr_score2+=repfold_aucpr**2
+
+		unfolded_true_label = df.loc[:, "True Label"].values
+		unfolded_pred_prob = df.loc[:, "Predicted Probability"].values
+		pooling_aucroc = sk_m.roc_auc_score(unfolded_true_label[~np.isnan(unfolded_true_label)].astype(bool),unfolded_pred_prob[~np.isnan(unfolded_true_label)])
+		averaging_aucroc = aucroc_score/(n_repfolds)
+		averaging_sample_variance_aucroc = (aucroc_score2-aucroc_score**2/n_repfolds)/(n_repfolds-1)
+
+		pooling_aucpr = sk_m.average_precision_score(unfolded_true_label[~np.isnan(unfolded_true_label)].astype(bool),unfolded_pred_prob[~np.isnan(unfolded_true_label)])
+		averaging_aucpr = aucpr_score/n_repfolds
+		averaging_sample_variance_aucpr = (aucpr_score2-aucpr_score**2/n_repfolds)/(n_repfolds-1)
+
+		if(n_folds>1):
+			std_error_aucroc = np.sqrt(averaging_sample_variance_aucroc*(1/n_repfolds+1/(n_folds-1)))
+			std_error_aucpr = np.sqrt(averaging_sample_variance_aucpr*(1/n_repfolds+1/(n_folds-1)))
+		else:
+			m = (unfolded_true_label==0).sum()
+			n = (unfolded_true_label==1).sum()
+			auc = pooling_aucroc
+			pxxy = auc/(2-auc)
+			pxyy = 2*auc**2/(1+auc)
+			variance = (auc*(1-auc)+(m-1)*(pxxy-auc**2)+(n-1)*(pxyy-auc**2))/(m*n)
+			std_error_aucroc = np.sqrt(variance)
+			c=1
+			auc = pooling_aucpr
+			pxxy = auc/(2-auc)
+			pxyy = 2*auc**2/(1+auc)
+			variance = (auc*(1-auc)+(m-1)*(pxxy-auc**2)+(n-1)*(pxyy-auc**2))/(m*n)
+			std_error_aucpr = np.sqrt(variance)
+
+		results_dict = {"pool_aucroc": pooling_aucroc,
+						"avg_aucroc": averaging_aucroc,
+						"avg_aucroc_stderr": std_error_aucroc,
+						"aucroc_95ci_low": averaging_aucroc - c*std_error_aucroc,
+						"aucroc_95ci_high": averaging_aucroc+c*std_error_aucroc,
+						"pool_aucpr": pooling_aucpr,
+						"avg_aucpr": averaging_aucpr,
+						"avg_aucpr_stderr": std_error_aucpr,
+						"aucpr_95ci_low": averaging_aucpr - c*std_error_aucpr,
+						"aucpr_95ci_high": averaging_aucpr+c*std_error_aucpr}
+
+		df.to_excel(self.output()["xls"].path)
+
 		with open(self.output()["auc_results"].path, 'wb') as f:
 			# Pickle the 'data' dictionary using the highest protocol available.
 			pickle.dump(results_dict, f, pickle.HIGHEST_PROTOCOL)
+
+		with open(self.output()["auc_results_txt"].path, 'w') as f:
+			# Pickle the 'data' dictionary using the highest protocol available.
+			print(results_dict, file=f)
+
 
 	def output(self):
 		if(self.ext_val == 'Yes'):
@@ -745,12 +869,13 @@ class EvaluateRiskScore(luigi.Task):
 		else:
 			prefix = ''
 		try:
-			os.makedirs(os.path.join(tmp_path, self.__class__.__name__,prefix+self.wf_name))
+			os.makedirs(os.path.join(tmp_path,self.__class__.__name__,prefix+self.wf_name))
 		except:
 			pass
-		return {"pred_prob": luigi.LocalTarget(os.path.join(tmp_path, self.__class__.__name__,prefix+self.wf_name,f"Unfolded_Pred_Prob_{prefix}{self.score_name}.pickle")),
-				"true_label": luigi.LocalTarget(os.path.join(tmp_path, self.__class__.__name__,prefix+self.wf_name,f"Unfolded_True_Label_{prefix}{self.score_name}.pickle")),
-				"auc_results": luigi.LocalTarget(os.path.join(tmp_path, self.__class__.__name__,prefix+self.wf_name,f"AUC_results_{prefix}{self.score_name}.pickle"))}
+
+		return {"xls": luigi.LocalTarget(os.path.join(tmp_path,self.__class__.__name__,prefix+self.wf_name,f"Unfolded_df_{prefix}{self.clf_name}.xlsx")),
+				"auc_results": luigi.LocalTarget(os.path.join(tmp_path,self.__class__.__name__,prefix+self.wf_name,f"AUC_results_{prefix}{self.clf_name}.pickle")),
+				"auc_results_txt": luigi.LocalTarget(os.path.join(tmp_path,self.__class__.__name__,prefix+self.wf_name,f"AUC_results_{prefix}{self.clf_name}.txt"))}
 
 class ConfidenceIntervalHanleyRS(luigi.Task):
 	wf_name = luigi.Parameter()
@@ -945,11 +1070,44 @@ class AllModels_PairedTTest(luigi.Task):
 	def run(self):
 		setupLog(self.__class__.__name__)
 		with open(self.output().path,'w') as f:
-			list_comparisons = []
 			for clf_or_score1 in self.list_ML+self.list_RS:
 				for clf_or_score2 in self.list_ML+self.list_RS:
 					if (clf_or_score1 != clf_or_score2):
-						(averaging_diff, pvalue) = paired_ttest(self.requires()[clf_or_score1],self.requires()[clf_or_score2], self.wf_name, tmp_path)
+						df1 = pd.read_excel(self.input()[clf_or_score1]['xls'])
+						df2 = pd.read_excel(self.input()[clf_or_score1]['xls'])
+						score=0
+						score2=0
+
+						n_reps = WF_info[self.wf_name]["cv_repetitions"]
+						n_folds = WF_info[self.wf_name]["cv_folds"]
+						n_repfolds = n_reps*n_folds
+
+						for rep in range(n_reps):
+							for fold in for rep in range(n_folds):
+								true_label1 = df1.loc[(df1['Repetition']==rep)&(df1['Fold']==fold), 'True Label'].values
+								pred_prob1 = df1.loc[(df1['Repetition']==rep)&(df1['Fold']==fold), 'Predicted Probabily'].values
+								tl1 = true_label1[~np.isnan(true_label1)]
+								pp1 = pred_prob1[~np.isnan(true_label1)]
+								auc1 = sk_m.roc_auc_score(tl1,pp1)
+
+								#True labels for the same workflow should be the same and there is no need to load the ones from the second
+								pred_prob2 = df2.loc[(df2['Repetition']==rep)&(df1['Fold']==fold), 'Predicted Probabily'].values
+								pp2 = pred_prob2[~np.isnan(true_label1)]
+								auc2 = sk_m.roc_auc_score(tl1,pp2)
+
+								score+= auc1-auc2
+								score2+=(auc1-auc2)**2
+
+						averaging_diff = score/n_repfolds
+						averaging_sample_variance = (score2-score**2/n_repfolds)/(n_repfolds-1)
+						if(n_folds>1):
+							std_error = np.sqrt(averaging_sample_variance*(1/n_repfolds+1/(n_folds-1)))
+						else:
+							std_error = 1e100
+
+						t_statistic = averaging_diff/std_error
+						pvalue = sc_st.t.sf(np.absolute(t_statistic), df= n_repfolds-1)
+
 						if clf_or_score1 in self.list_ML:
 							formal_name1 = ML_info[clf_or_score1]["formal_name"]
 						else:
@@ -960,6 +1118,7 @@ class AllModels_PairedTTest(luigi.Task):
 							formal_name2 = RS_info[clf_or_score2]["formal_name"]
 						wf_formal_title = WF_info[self.wf_name]["formal_title"]
 						f.write(f"{wf_formal_title}: {formal_name1}-{formal_name2}, Avg Diff: {averaging_diff}, p-value: {pvalue}\n")
+
 
 	def output(self):
 		if(self.ext_val == 'Yes'):
@@ -1067,10 +1226,10 @@ class ThresholdPoints(luigi.Task):
 
 	def run(self):
 		setupLog(self.__class__.__name__)
-		with open(self.input()["pred_prob"].path, 'rb') as f:
-			pred_prob=pickle.load(f)
-		with open(self.input()["true_label"].path, 'rb') as f:
-			true_label=pickle.load(f)
+
+		df = pd.read_excel(self.input()["xls"].path)
+		true_label = df['True Label'].values
+		pred_prob = df['Predicted Probability'].values
 
 		with open(self.output().path,'w') as f:
 			(best_threshold, tprate, fprate, tnrate, fnrate, sens, spec, prec, nprv) = cutoff_threshold_accuracy(pred_prob, true_label)
@@ -1256,30 +1415,89 @@ class MDAFeatureImportances(luigi.Task):
 	clf_name = luigi.Parameter()
 	wf_name = luigi.Parameter()
 	ext_val = luigi.Parameter(default='No')
+	n_iterartions = luigi.IntParameter(default=5)
 
 	def requires(self):
+		# if self.ext_val == 'No':
+		# 	return {'df': FilterPreprocessDatabase(self.wf_name)}
+		# elif self.ext_val == 'Yes':
+		# 	return {'df': FilterPreprocessExternalDatabase(self.wf_name),
+		# 			'clf': FinalModelAndHyperparameterResults(clf_name=self.clf_name, wf_name=self.wf_name)}
 		if self.ext_val == 'No':
-			return {'df': FilterPreprocessDatabase(self.wf_name)}
+			for rep in WF_info[self.wf_name]["cv_repetitions"]:
+				yield CalculateKFold(clf_name = self.clf_name, wf_name = self.wf_name, seed = rep)
 		elif self.ext_val == 'Yes':
-			return {'df': FilterPreprocessExternalDatabase(self.wf_name),
-					'clf': FinalModelAndHyperparameterResults(clf_name=self.clf_name, wf_name=self.wf_name)}
+			return {"model":FinalModelAndHyperparameterResults(wf_name = self.wf_name, clf_name = self.clf_name),
+					"data":FillnaExternalDatabase()}
 
 	def run(self):
 		setupLog(self.__class__.__name__)
-		with open(self.output().path,'w') as f:
-			with contextlib.redirect_stdout(f):
-				df_input = pd.read_pickle(self.input()['df']["pickle"].path)
-				df_filtered = WF_info[self.wf_name]["filter_function"](df_input)
-				label = WF_info[self.wf_name]["label_name"]
-				features = WF_info[self.wf_name]["feature_list"]
 
-				if self.ext_val == 'No':
-					(pi_cv, std_pi_cv) = mdaeli5_analysis(df_filtered, label, features, clf=ML_info[self.clf_name]["clf"],clf_name=self.clf_name)
-				elif self.ext_val == 'Yes':
-					with open(self.input()["clf"].path, 'rb') as f:
-						clf = pickle.load(f)
-					(pi_cv, std_pi_cv) = mdaeli5_analysis_ext(df_filtered, label, features, final_model = clf,clf_name=self.clf_name)
-					pass
+		feature_list = WF_info[self.wf_name]['feature_list']
+		mda = {}
+		mda2 = {}
+		for feat in feature_list:
+			mda[feat] = 0
+			mda2[feat] = 0
+
+		if self.ext_val == 'No':
+			for rep in range(WF_info[self.wf_name]["cv_repetitions"]):
+				for fold in range(WF_info[self.wf_name]["cv_folds"]):
+					# df_train = pd.read_excel(self.input()[rep][f"Train_{fold}"].path)
+					df_test = pd.read_excel(self.input()[rep][f"Test_{fold}"].path)
+					with open(self.input()[rep][f"Model_{fold}"].path, "rb") as f
+						model = pickle.load(f)
+
+					for feat in feature_list:
+						df_shuffled = df_test.copy()
+						true_label = df_shuffled["True Label"].values
+						pred_prob_original = df_shuffled["Predicted Probability"].values
+						aucroc_original = sk_m.roc_auc_score(true_label[~np.isnan(true_label)].astype(bool),pred_prob[~np.isnan(true_label)])
+
+						for i in range(self.n_iterations):
+							df_shuffled[feat] = np.random.permutation(df_test[feat].values)
+							try:
+								pred_prob = model.predict_proba(df_shuffled.loc[:, feature_list])[:,1]
+							except:
+								pred_prob = model.decision_function(df_shuffled.loc[:, feature_list])
+							aucroc_shuffled = sk_m.roc_auc_score(true_label[~np.isnan(true_label)].astype(bool),pred_prob[~np.isnan(true_label)])
+							mda[feat] += aucroc_original - aucroc_shuffled
+							mda2[feat] += (aucroc_original - aucroc_shuffled)**2
+			for feat in feature_list:
+				mda[feat] = mda[feat]/(WF_info[self.wf_name]["cv_repetitions"]*WF_info[self.wf_name]["cv_folds"]*self.n_iterations)
+				mda2[feat] = mda2[feat]/(WF_info[self.wf_name]["cv_repetitions"]*WF_info[self.wf_name]["cv_folds"]*self.n_iterations)
+		elif self.ext_val == 'Yes':
+			# df_train = pd.read_excel(self.input()[rep][f"Train_{fold}"].path)
+			df_test = pd.read_excel(self.input()["data"].path)
+			with open(self.input()["model"].path, "rb") as f
+				model = pickle.load(f)
+
+			for feat in feature_list:
+				df_shuffled = df_test.copy()
+				true_label = df_shuffled["True Label"].values
+				pred_prob_original = df_shuffled["Predicted Probability"].values
+				aucroc_original = sk_m.roc_auc_score(true_label[~np.isnan(true_label)].astype(bool),pred_prob[~np.isnan(true_label)])
+
+				for i in range(self.n_iterations):
+					df_shuffled[feat] = np.random.permutation(df_test[feat].values)
+					try:
+						pred_prob = model.predict_proba(df_shuffled.loc[:, feature_list])[:,1]
+					except:
+						pred_prob = model.decision_function(df_shuffled.loc[:, feature_list])
+					aucroc_shuffled = sk_m.roc_auc_score(true_label[~np.isnan(true_label)].astype(bool),pred_prob[~np.isnan(true_label)])
+					mda[feat] += aucroc_original - aucroc_shuffled
+					mda2[feat] += (aucroc_original - aucroc_shuffled)**2
+			for feat in feature_list:
+				mda[feat] = mda[feat]/(self.n_iterations)
+				mda2[feat] = mda2[feat]/(self.n_iterations)
+
+		sorted_feats = sorted(feature_list, key= lambda x: mda[feat]/(np.sqrt(mda2[feat]-mda[feat]**2)+1e-14))
+
+		with open(self.output().path,'w') as f:
+			print(f"{'Feature':20.20} {'MDA':10.10} {'Variation':10.10}, file=f)
+			for feat in sorted_feats:
+				print(f"{feat:20.20} {mda[feat]:0.4e} {np.sqrt(mda2[feat]-mda[feat]**2):0.4e})
+
 	def output(self):
 		try:
 			os.makedirs(os.path.join(tmp_path,self.__class__.__name__))
