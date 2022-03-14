@@ -1455,7 +1455,7 @@ class MDAFeatureImportances(luigi.Task):
 								pred_prob = model.predict_proba(df_shuffled.loc[:, feature_list])[:,1]
 							except:
 								pred_prob = model.decision_function(df_shuffled.loc[:, feature_list])
-							aucroc_shuffled = sk_m.roc_auc_score(true_label.loc[true_label.notnull()].astype(bool),pred_prob.loc[true_label.notnull()])
+							aucroc_shuffled = sk_m.roc_auc_score(true_label.loc[true_label.notnull()].astype(bool),pred_prob[true_label.notnull()])
 							mda[feat] += aucroc_original - aucroc_shuffled
 							mda2[feat] += (aucroc_original - aucroc_shuffled)**2
 			for feat in feature_list:
