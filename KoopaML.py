@@ -554,7 +554,7 @@ class CalculateKFold(luigi.Task):
 
 	def output(self):
 		try:
-			os.makedirs(os.path.join(tmp_path,self.__class__.__name__,self.wf_name,self.clf_name))
+			os.makedirs(os.path.join(tmp_path,self.__class__.__name__,self.wf_name,self.clf_name,f"RepetitionNo{self.seed:03d}"))
 		except:
 			pass
 		dic = {}
