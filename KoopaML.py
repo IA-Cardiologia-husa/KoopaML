@@ -386,7 +386,7 @@ class CreateFolds(luigi.Task):
 
 		df_input = pd.read_pickle(self.input()["pickle"].path)
 
-		if(self.cv_type == 'kfold'):
+		if(cv_type == 'kfold'):
 			data = filter_function(df_input)
 			X = data.loc[:,features]
 			Y = data.loc[:,[label]].astype(bool)
@@ -397,7 +397,7 @@ class CreateFolds(luigi.Task):
 				data_train.to_excel(self.output()[f'Train_{i}'].path)
 				data_test.to_excel(self.output()[f'Test_{i}'].path)
 				i+=1
-		elif(self.cv_type == 'unfilteredkfold'):
+		elif(cv_type == 'unfilteredkfold'):
 			data = df_input
 			X = data.loc[:,features]
 			Y = data.loc[:,[label]].astype(bool)
@@ -408,7 +408,7 @@ class CreateFolds(luigi.Task):
 				data_train.to_excel(self.output()[f'Train_{i}'].path)
 				data_test.to_excel(self.output()[f'Test_{i}'].path)
 				i+=1
-		elif(self.cv_type == 'stratifiedkfold'):
+		elif(cv_type == 'stratifiedkfold'):
 			data = filter_function(df_input)
 			X = data.loc[:,features]
 			Y = data.loc[:,[label]].astype(bool)
