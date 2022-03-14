@@ -1083,7 +1083,7 @@ class AllModels_PairedTTest(luigi.Task):
 						n_repfolds = n_reps*n_folds
 
 						for rep in range(n_reps):
-							for fold in for rep in range(n_folds):
+							for fold in range(n_folds):
 								true_label1 = df1.loc[(df1['Repetition']==rep)&(df1['Fold']==fold), 'True Label'].values
 								pred_prob1 = df1.loc[(df1['Repetition']==rep)&(df1['Fold']==fold), 'Predicted Probabily'].values
 								tl1 = true_label1[~np.isnan(true_label1)]
