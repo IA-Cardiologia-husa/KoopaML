@@ -1494,9 +1494,9 @@ class MDAFeatureImportances(luigi.Task):
 		sorted_feats = sorted(feature_list, key= lambda x: mda[feat]/(np.sqrt(mda2[feat]-mda[feat]**2)+1e-14))
 
 		with open(self.output().path,'w') as f:
-			print(f"{'Feature':20.20} {'MDA':10.10} {'Variation':10.10}, file=f)
+			print(f"{'Feature':20.20} {'MDA':10.10} {'Variation':10.10}", file=f)
 			for feat in sorted_feats:
-				print(f"{feat:20.20} {mda[feat]:0.4e} {np.sqrt(mda2[feat]-mda[feat]**2):0.4e})
+				print(f"{feat:20.20} {mda[feat]:0.4e} {np.sqrt(mda2[feat]-mda[feat]**2):0.4e}", file=f)
 
 	def output(self):
 		try:
