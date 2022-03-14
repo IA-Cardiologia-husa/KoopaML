@@ -778,9 +778,9 @@ class EvaluateRiskScore(luigi.Task):
 		else:
 			for i in range(WF_info[self.wf_name]['cv_repetitions']):
 				if(RS_info[self.score_name]['refit_oddratios'] == 'No'):
-					yield RiskScore_KFold(wf_name=self.wf_name, score_name=self.score_name)
+					yield RiskScore_KFold(wf_name=self.wf_name, score_name=self.score_name, seed=i)
 				elif(RS_info[self.score_name]['refit_oddratios'] == 'Yes'):
-					yield RefittedRiskScore_KFold(wf_name=self.wf_name, score_name=self.score_name)
+					yield RefittedRiskScore_KFold(wf_name=self.wf_name, score_name=self.score_name, seed=i)
 				else:
 					raise(f"invalid 'refit_or' value in score {score_name}")
 
