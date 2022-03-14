@@ -6,7 +6,6 @@ import pandas as pd
 import numpy as np
 import pickle
 import glob
-import eli5
 import os
 
 from user_variables_info import dict_var
