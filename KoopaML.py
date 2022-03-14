@@ -804,8 +804,8 @@ class EvaluateRiskScore(luigi.Task):
 
 		for rep in range(n_reps):
 			for fold in range(n_folds):
-				true_label = df.loc[(df['Repetition']==rep)&(df['fold']==fold)], "True Label"].values
-				pred_prob = df.loc[(df['Repetition']==rep)&(df['fold']==fold)], "Predicted Probability"].values
+				true_label = df.loc[(df['Repetition']==rep)&(df['fold']==fold), "True Label"].values
+				pred_prob = df.loc[(df['Repetition']==rep)&(df['fold']==fold), "Predicted Probability"].values
 				repfold_aucroc = sk_m.roc_auc_score(true_label[~np.isnan(true_label)].astype(bool),pred_prob[~np.isnan(true_label)])
 				aucroc_score+=repfold_aucroc
 				aucroc_score2+=repfold_aucroc**2
