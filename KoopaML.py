@@ -549,7 +549,7 @@ class CalculateKFold(luigi.Task):
 			X_train.to_excel(self.output()[f"Train_{i}"].path)
 			X_test.to_excel(self.output()[f"Test_{i}"].path)
 
-			with open(self.output().path[f"Model_{i}"],'wb') as f:
+			with open(self.output()[f"Model_{i}"].path,'wb') as f:
 				pickle.dump(calibrated_clf, f, pickle.HIGHEST_PROTOCOL)
 
 	def output(self):
