@@ -382,7 +382,7 @@ class CreateFolds(luigi.Task):
 		label = WF_info[self.wf_name]["label_name"]
 		group_label = WF_info[self.wf_name]["group_label"]
 		cv_type = WF_info[self.wf_name]["validation_type"]
-		folds = WF_info[self.wf_name]["cv_folds"]
+		cv_folds = WF_info[self.wf_name]["cv_folds"]
 
 		df_input = pd.read_pickle(self.input()["pickle"].path)
 
