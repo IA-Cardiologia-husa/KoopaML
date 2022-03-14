@@ -437,7 +437,7 @@ class CreateFolds(luigi.Task):
 			X = data.loc[:,features]
 			Y = data.loc[:,[label]].astype(bool)
 			G = data.loc[:, group_label]
-			sgkf = StratifiedGroupKFold(self.cv_folds, random_state=self.seed, shuffle=True)
+			sgkf = sk_ms.StratifiedGroupKFold(self.cv_folds, random_state=self.seed, shuffle=True)
 			i=0
 			for train_index, test_index in sgkf.split(X,Y,G):
 				data_train, data_test = data.iloc[train_index], data.iloc[test_index]
@@ -478,15 +478,6 @@ class CalculateKFold(luigi.Task):
 		folds = WF_info[self.wf_name]["cv_folds"]
 		clf = ML_info[self.clf_name]["clf"]
 		calibration = ML_info[self.clf_name]["calibration"]
-
-		if ((cv_type == 'kfold') or (cv_type=='stratifiedkfold')):
-			tl_pp_dict = predict_kfold_ML(df_filtered, label, features, cv_type, clf, calibration, self.seed, folds)
-		elif ((cv_type == 'groupkfold') or (cv_type=='stratifiedgroupkfold')):
-			tl_pp_dict = predict_groupkfold_ML(df_filtered, label, features, group_label, cv_type, clf, calibration,self.seed, folds)
-		elif (cv_type == 'unfilteredkfold'):
-			tl_pp_dict = predict_filter_kfold_ML(df_input, label, features, filter_function, clf, calibration,self.seed, folds)
-		else:
-			raise('cv_type not recognized')
 
 		for i in range(folds):
 			df_train = pd.read_excel(self.input()[f'Train_{i}'].path)

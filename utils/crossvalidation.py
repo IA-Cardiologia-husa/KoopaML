@@ -6,7 +6,7 @@ import sklearn.calibration as sk_cal
 import sklearn.linear_model as sk_lm
 import time
 
-from .stratifiedgroupkfold import StratifiedGroupKFold
+# from .stratifiedgroupkfold import StratifiedGroupKFold
 
 def external_validation_RS(external_data, label, feature_oddratio):
 
@@ -207,7 +207,7 @@ def predict_groupkfold_ML(data, label, features, group_label, cv_type, clf, cali
 	G = data.loc[:, group_label]
 
 	if (cv_type == 'stratifiedgroupkfold'):
-		gkf = StratifiedGroupKFold(cvfolds, random_state=seed, shuffle=True)
+		gkf = sk_ms.StratifiedGroupKFold(cvfolds, random_state=seed, shuffle=True)
 	elif (cv_type == 'groupkfold'):
 		X, Y, G = sk_u.shuffle(X,Y,G, random_state=seed)
 		gkf = sk_ms.GroupKFold(cvfolds)
@@ -281,7 +281,7 @@ def predict_groupkfold_RS(data, label, features, group_label, cv_type, feature_o
 	G = data.loc[:, group_label]
 
 	if (cv_type == 'stratifiedgroupkfold'):
-		gkf = StratifiedGroupKFold(cvfolds, random_state=seed, shuffle=True)
+		gkf = sk_ms.StratifiedGroupKFold(cvfolds, random_state=seed, shuffle=True)
 	elif (cv_type == 'groupkfold'):
 		X, Y, G = sk_u.shuffle(X,Y,G, random_state=seed)
 		gkf = sk_ms.GroupKFold(cvfolds)
@@ -346,7 +346,7 @@ def predict_groupkfold_refitted_RS(data, label, features, group_label, cv_type, 
 	G = data.loc[:, group_label]
 
 	if (cv_type == 'stratifiedgroupkfold'):
-		gkf = StratifiedGroupKFold(cvfolds, random_state=seed, shuffle=True)
+		gkf = sk_ms.StratifiedGroupKFold(cvfolds, random_state=seed, shuffle=True)
 	elif (cv_type == 'groupkfold'):
 		X, Y, G = sk_u.shuffle(X,Y,G, random_state=seed)
 		gkf = sk_ms.GroupKFold(cvfolds)
