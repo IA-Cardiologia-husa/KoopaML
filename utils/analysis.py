@@ -348,10 +348,7 @@ def plot_all_rocs(task_requires, fig_path,title):
 	color_index=0
 
 	for score in task_requires.keys():
-		with open(task_requires[score]["pred_prob"].path, 'rb') as f:
-			pred_prob=pickle.load(f)
-		with open(task_requires[score]["true_label"].path, 'rb') as f:
-			true_label=pickle.load(f)
+		df = pd.read_excel(task_requires[score]["xls"].path)
 		with open(task_requires[score]["auc_results"].path, 'rb') as f:
 			results_dict=pickle.load(f)
 
@@ -362,8 +359,8 @@ def plot_all_rocs(task_requires, fig_path,title):
 		else:
 			score_name = "ERROR: Unknown score or classifier"
 
-		pred_prob = pred_prob[~np.isnan(true_label)]
-		true_label = true_label[~np.isnan(true_label)]
+		true_label = df.loc[df['True Label'].notnull(), 'True Label'].astype(bool).values
+		pred_prob = df.loc[df['True Label'].notnull(), 'PredictedProbability'].values
 
 		fpr, tpr, thresholds = sk_m.roc_curve(true_label,pred_prob)
 		plt.plot(fpr, tpr, lw=2, alpha=1, color=cmap(color_index) , label = f'{score_name}: AUC ={results_dict["avg_aucroc"]:1.2f} ({results_dict["aucroc_95ci_low"]:1.2f}-{results_dict["aucroc_95ci_high"]:1.2f})' )
@@ -387,10 +384,7 @@ def plot_all_prs(task_requires, fig_path,title):
 	color_index=0
 
 	for score in task_requires.keys():
-		with open(task_requires[score]["pred_prob"].path, 'rb') as f:
-			pred_prob=pickle.load(f)
-		with open(task_requires[score]["true_label"].path, 'rb') as f:
-			true_label=pickle.load(f)
+		df = pd.read_excel(task_requires[score]["xls"].path)
 		with open(task_requires[score]["auc_results"].path, 'rb') as f:
 			results_dict=pickle.load(f)
 
@@ -400,6 +394,9 @@ def plot_all_prs(task_requires, fig_path,title):
 			score_name = RS_info[score]["formal_name"]
 		else:
 			score_name = "ERROR: Unknown score or classifier"
+
+		true_label = df.loc[df['True Label'].notnull(), 'True Label'].astype(bool).values
+		pred_prob = df.loc[df['True Label'].notnull(), 'PredictedProbability'].values
 
 		pred_prob = pred_prob[~np.isnan(true_label)]
 		true_label = true_label[~np.isnan(true_label)]
