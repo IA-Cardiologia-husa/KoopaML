@@ -817,13 +817,13 @@ class EvaluateRiskScore(luigi.Task):
 				aucpr_score+=repfold_aucpr
 				aucpr_score2+=repfold_aucpr**2
 
-		unfolded_true_label = df.loc[:, "True Label"].values
-		unfolded_pred_prob = df.loc[:, "Predicted Probability"].values
-		pooling_aucroc = sk_m.roc_auc_score(unfolded_true_label.loc[unfolded_true_label.notnull()].astype(bool),unfolded_pred_prob[unfolded_true_label.notnull()])
+		unfolded_true_label = df.loc[:, "True Label"]
+		unfolded_pred_prob = df.loc[:, "Predicted Probability"]
+		pooling_aucroc = sk_m.roc_auc_score(unfolded_true_label.loc[unfolded_true_label.notnull()].astype(bool),unfolded_pred_prob.loc[unfolded_true_label.notnull()])
 		averaging_aucroc = aucroc_score/(n_repfolds)
 		averaging_sample_variance_aucroc = (aucroc_score2-aucroc_score**2/n_repfolds)/(n_repfolds-1)
 
-		pooling_aucpr = sk_m.average_precision_score(unfolded_true_label.loc[unfolded_true_label.notnull()].astype(bool),unfolded_pred_prob[unfolded_true_label.notnull()])
+		pooling_aucpr = sk_m.average_precision_score(unfolded_true_label.loc[unfolded_true_label.notnull()].astype(bool),unfolded_pred_prob.loc[unfolded_true_label.notnull()])
 		averaging_aucpr = aucpr_score/n_repfolds
 		averaging_sample_variance_aucpr = (aucpr_score2-aucpr_score**2/n_repfolds)/(n_repfolds-1)
 
