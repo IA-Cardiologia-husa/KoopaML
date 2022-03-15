@@ -801,6 +801,7 @@ class EvaluateRiskScore(luigi.Task):
 
 		n_reps = df['Repetition'].max()+1
 		n_folds = df['Fold'].max()+1
+		n_repfolds = n_reps*n_folds
 
 		aucroc_score = 0
 		aucroc_score2 = 0
