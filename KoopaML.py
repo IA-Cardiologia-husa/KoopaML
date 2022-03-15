@@ -804,22 +804,22 @@ class EvaluateRiskScore(luigi.Task):
 
 		for rep in range(n_reps):
 			for fold in range(n_folds):
-				true_label = df.loc[(df['Repetition']==rep)&(df['Fold']==fold), "True Label"].values
-				pred_prob = df.loc[(df['Repetition']==rep)&(df['Fold']==fold), "Predicted Probability"].values
-				repfold_aucroc = sk_m.roc_auc_score(true_label[~np.isnan(true_label)].astype(bool),pred_prob[~np.isnan(true_label)])
+				true_label = df.loc[(df['Repetition']==rep)&(df['Fold']==fold), "True Label"]
+				pred_prob = df.loc[(df['Repetition']==rep)&(df['Fold']==fold), "Predicted Probability"]
+				repfold_aucroc = sk_m.roc_auc_score(true_label.loc[true_label.notnull())].astype(bool),pred_prob.loc[true_label.notnull())])
 				aucroc_score+=repfold_aucroc
 				aucroc_score2+=repfold_aucroc**2
-				repfold_aucpr = sk_m.average_precision_score(true_label[~np.isnan(true_label)].astype(bool),pred_prob[~np.isnan(true_label)])
+				repfold_aucpr = sk_m.average_precision_score(true_label.loc[true_label.notnull())].astype(bool),pred_prob.loc[true_label.notnull())])
 				aucpr_score+=repfold_aucpr
 				aucpr_score2+=repfold_aucpr**2
 
 		unfolded_true_label = df.loc[:, "True Label"].values
 		unfolded_pred_prob = df.loc[:, "Predicted Probability"].values
-		pooling_aucroc = sk_m.roc_auc_score(unfolded_true_label[~np.isnan(unfolded_true_label)].astype(bool),unfolded_pred_prob[~np.isnan(unfolded_true_label)])
+		pooling_aucroc = sk_m.roc_auc_score(unfolded_true_label.loc[unfolded_true_label.notnull())].astype(bool),unfolded_pred_prob[unfolded_true_label.notnull()])
 		averaging_aucroc = aucroc_score/(n_repfolds)
 		averaging_sample_variance_aucroc = (aucroc_score2-aucroc_score**2/n_repfolds)/(n_repfolds-1)
 
-		pooling_aucpr = sk_m.average_precision_score(unfolded_true_label[~np.isnan(unfolded_true_label)].astype(bool),unfolded_pred_prob[~np.isnan(unfolded_true_label)])
+		pooling_aucpr = sk_m.average_precision_score(unfolded_true_label.loc[unfolded_true_label.notnull())].astype(bool),unfolded_pred_prob[unfolded_true_label.notnull()])
 		averaging_aucpr = aucpr_score/n_repfolds
 		averaging_sample_variance_aucpr = (aucpr_score2-aucpr_score**2/n_repfolds)/(n_repfolds-1)
 
