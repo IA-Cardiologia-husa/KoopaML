@@ -584,10 +584,11 @@ class RiskScore_KFold(luigi.Task):
 		#TODO Eliminate folds and repetitions here and afterwards, it does not make sense with risk scores
 		for i in range(folds):
 			df_test = pd.read_excel(self.input()[f'Test_{i}'].path)
+			df_train = pd.read_excel(self.input()[f'Train_{i}'].path)
 
 			Y_prob = pd.Series(0, index=df_test.index)
 			for feat in feature_oddratio_dict.keys():
-				Y_prob += feature_oddratio_dict[feat]*df_test.loc[:,feat]
+				Y_prob += feature_oddratio_dict[feat]*df_test.loc[:,feat].fillna(pd.concat([df_test, df_train])[feat].mean())
 
 			df_test['True Label'] = df_test[label].astype(int)
 			df_test['Predicted Probability'] = Y_prob
