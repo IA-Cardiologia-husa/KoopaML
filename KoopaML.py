@@ -829,6 +829,8 @@ class EvaluateRiskScore(luigi.Task):
 		averaging_sample_variance_aucpr = (aucpr_score2-aucpr_score**2/n_repfolds)/(n_repfolds-1)
 
 		if(n_folds>1):
+			critical_pvalue=0.05
+			c = sc_st.t.ppf(1-critical_pvalue/2, df= n_repfolds-1)
 			std_error_aucroc = np.sqrt(averaging_sample_variance_aucroc*(1/n_repfolds+1/(n_folds-1)))
 			std_error_aucpr = np.sqrt(averaging_sample_variance_aucpr*(1/n_repfolds+1/(n_folds-1)))
 		else:
