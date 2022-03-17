@@ -1081,8 +1081,8 @@ class AllModels_PairedTTest(luigi.Task):
 			for clf_or_score1 in self.list_ML+self.list_RS:
 				for clf_or_score2 in self.list_ML+self.list_RS:
 					if (clf_or_score1 != clf_or_score2):
-						df1 = pd.read_excel(self.input()[clf_or_score1]['xls'])
-						df2 = pd.read_excel(self.input()[clf_or_score1]['xls'])
+						df1 = pd.read_excel(self.input()[clf_or_score1]['xls'].path)
+						df2 = pd.read_excel(self.input()[clf_or_score1]['xls'].path)
 						score=0
 						score2=0
 
@@ -1503,9 +1503,9 @@ class MDAFeatureImportances(luigi.Task):
 		sorted_feats = sorted(feature_list, key= lambda x: mda[x], reverse=True)
 
 		with open(self.output().path,'w') as f:
-			print(f"{'Feature':20.20} {'MDA_norm':10.10} {'MDA':10.10} {'Variation':10.10} {'z-score':10.10}", file=f)
+			print(f"{'Feature':30.30} {'MDA_norm':10.10} {'MDA':10.10} {'Variation':10.10} {'z-score':10.10}", file=f)
 			for feat in sorted_feats:
-				print(f"{feat:20.20} {mda[feat]/mda[sorted_feats[0]]:0.4e} {mda[feat]:0.4e} {np.sqrt(mda2[feat]-mda[feat]**2):0.4e} {mda[feat]/(np.sqrt(mda2[feat]-mda[feat]**2)+1e-14):0.4e}", file=f)
+				print(f"{feat:30.30} {mda[feat]/mda[sorted_feats[0]]:0.4e} {mda[feat]:0.4e} {np.sqrt(mda2[feat]-mda[feat]**2):0.4e} {mda[feat]/(np.sqrt(mda2[feat]-mda[feat]**2)+1e-14):0.4e}", file=f)
 
 	def output(self):
 		try:
