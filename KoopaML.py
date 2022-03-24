@@ -1243,13 +1243,13 @@ class ThresholdPoints(luigi.Task):
 			(best_threshold, tprate, fprate, tnrate, fnrate, sens, spec, prec, nprv) = cutoff_threshold_accuracy(pred_prob, true_label)
 			f.write(f'Threshold: {best_threshold} Optimum for accuracy\n')
 			f.write(f'TP:{tprate*100:.1f} FP:{fprate*100:.1f} TN:{tnrate*100:.1f} FN:{fnrate*100:.1f}\n')
-			f.write(f'Sensitivity:{sens*100:.1f} Specifity:{spec*100:.1f} Precision:{prec*100:.1f} NPRv:{nprv*100:.1f}\n')
+			f.write(f'Sensitivity:{sens*100:.1f} Specificity:{spec*100:.1f} Precision:{prec*100:.1f} NPRv:{nprv*100:.1f}\n')
 			f.write("\n")
 
 			(best_threshold, tprate, fprate, tnrate, fnrate, sens, spec, prec, nprv) = cutoff_threshold_single(pred_prob, true_label)
 			f.write(f'Threshold: {best_threshold} Optimum for single point AUC\n')
 			f.write(f'TP:{tprate*100:.1f} FP:{fprate*100:.1f} TN:{tnrate*100:.1f} FN:{fnrate*100:.1f}\n')
-			f.write(f'Sensitivity:{sens*100:.1f} Specifity:{spec*100:.1f} Precision:{prec*100:.1f} NPRv:{nprv*100:.1f}\n')
+			f.write(f'Sensitivity:{sens*100:.1f} Specificity:{spec*100:.1f} Precision:{prec*100:.1f} NPRv:{nprv*100:.1f}\n')
 			f.write("\n")
 
 			threshold_dict = cutoff_threshold_double(pred_prob, true_label)
@@ -1259,10 +1259,10 @@ class ThresholdPoints(luigi.Task):
 			f.write('Optimum for double point AUC\n')
 			f.write(f'Threshold: {best_threshold1}\n')
 			f.write(f'TP:{tprate1*100:.1f} FP:{fprate1*100:.1f} TN:{tnrate1*100:.1f} FN:{fnrate1*100:.1f}\n')
-			f.write(f'Sensitivity:{sens1*100:.1f} Specifity:{spec1*100:.1f} Precision:{prec1*100:.1f} NPRv:{nprv1*100:.1f}\n')
+			f.write(f'Sensitivity:{sens1*100:.1f} Specificity:{spec1*100:.1f} Precision:{prec1*100:.1f} NPRv:{nprv1*100:.1f}\n')
 			f.write(f'Threshold: {best_threshold2}\n')
 			f.write(f'TP:{tprate2*100:.1f} FP:{fprate2*100:.1f} TN:{tnrate2*100:.1f} FN:{fnrate2*100:.1f}\n')
-			f.write(f'Sensitivity:{sens2*100:.1f} Specifity:{spec2*100:.1f} Precision:{prec2*100:.1f} NPRv:{nprv2*100:.1f}\n')
+			f.write(f'Sensitivity:{sens2*100:.1f} Specificity:{spec2*100:.1f} Precision:{prec2*100:.1f} NPRv:{nprv2*100:.1f}\n')
 			f.write("\n")
 
 			threshold_dict = cutoff_threshold_triple(pred_prob, true_label)
@@ -1273,20 +1273,20 @@ class ThresholdPoints(luigi.Task):
 			f.write('Optimum for triple point AUC\n')
 			f.write(f'Threshold: {best_threshold1}\n')
 			f.write(f'TP:{tprate1*100:.1f} FP:{fprate1*100:.1f} TN:{tnrate1*100:.1f} FN:{fnrate1*100:.1f}\n')
-			f.write(f'Sensitivity:{sens1*100:.1f} Specifity:{spec1*100:.1f} Precision:{prec1*100:.1f} NPRv:{nprv1*100:.1f}\n')
+			f.write(f'Sensitivity:{sens1*100:.1f} Specificity:{spec1*100:.1f} Precision:{prec1*100:.1f} NPRv:{nprv1*100:.1f}\n')
 			f.write(f'Threshold: {best_threshold2}\n')
 			f.write(f'TP:{tprate2*100:.1f} FP:{fprate2*100:.1f} TN:{tnrate2*100:.1f} FN:{fnrate2*100:.1f}\n')
-			f.write(f'Sensitivity:{sens2*100:.1f} Specifity:{spec2*100:.1f} Precision:{prec2*100:.1f} NPRv:{nprv2*100:.1f}\n')
+			f.write(f'Sensitivity:{sens2*100:.1f} Specificity:{spec2*100:.1f} Precision:{prec2*100:.1f} NPRv:{nprv2*100:.1f}\n')
 			f.write(f'Threshold: {best_threshold3}\n')
 			f.write(f'TP:{tprate3*100:.1f} FP:{fprate3*100:.1f} TN:{tnrate3*100:.1f} FN:{fnrate3*100:.1f}\n')
-			f.write(f'Sensitivity:{sens3*100:.1f} Specifity:{spec3*100:.1f} Precision:{prec3*100:.1f} NPRv:{nprv3*100:.1f}\n')
+			f.write(f'Sensitivity:{sens3*100:.1f} Specificity:{spec3*100:.1f} Precision:{prec3*100:.1f} NPRv:{nprv3*100:.1f}\n')
 			f.write("\n")
 
 			for beta in [0.5,1,2]:
 				(max_f1_threshold, tprate, fprate, tnrate, fnrate, sens, spec, prec, nprv) = cutoff_threshold_maxfbeta(pred_prob, true_label, beta)
 				f.write(f'Threshold: {max_f1_threshold} Optimum for f{beta}\n')
 				f.write(f'TP:{tprate*100:.1f} FP:{fprate*100:.1f} TN:{tnrate*100:.1f} FN:{fnrate*100:.1f}\n')
-				f.write(f'Sensitivity:{sens*100:.1f} Specifity:{spec*100:.1f} Precision:{prec*100:.1f} NPRv:{nprv*100:.1f}\n')
+				f.write(f'Sensitivity:{sens*100:.1f} Specificity:{spec*100:.1f} Precision:{prec*100:.1f} NPRv:{nprv*100:.1f}\n')
 				f.write("\n")
 
 	def output(self):
@@ -1548,7 +1548,7 @@ class AllThresholds(luigi.Task):
 				(threshold, tprate, fprate, tnrate, fnrate, sens, spec, prec, nprv) = i
 				f.write(f'Threshold: {threshold}\n')
 				f.write(f'TP:{tprate*100:.1f} FP:{fprate*100:.1f} TN:{tnrate*100:.1f} FN:{fnrate*100:.1f}\n')
-				f.write(f'Sensitivity:{sens*100:.1f} Specifity:{spec*100:.1f} Precision:{prec*100:.1f} NPRv:{nprv*100:.1f}\n')
+				f.write(f'Sensitivity:{sens*100:.1f} Specificity:{spec*100:.1f} Precision:{prec*100:.1f} NPRv:{nprv*100:.1f}\n')
 				rows.append([threshold, tprate, fprate, tnrate, fnrate, sens, spec, prec, nprv])
 		df_thr = pd.DataFrame(rows, columns=['Threshold','TP','FP','TN','FN', 'sensitivity','specificity','precision','nprv'])
 		with open(self.output()['df'].path,'w') as f:
