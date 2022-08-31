@@ -9,6 +9,7 @@ import scipy.stats as sc_st
 import logging
 import sys
 import shutil
+import shap
 
 import luigi
 import contextlib
@@ -1454,8 +1455,8 @@ class ShapleyValues(luigi.Task):
 			for rep in range(WF_info[self.wf_name]["cv_repetitions"]):
 				for fold in range(WF_info[self.wf_name]["cv_folds"]):
 					df_train = pd.read_excel(self.input()[rep][f"Train_{fold}"].path)
-					df_test = pd.read_excel(self.input()[rep][f"Test_{fold}"].path)
-					df_test_total = pd.concat([df_test_total, df])
+					df_test = pd.read_excel(self.input()[rep][f"Test_{fold}"].path).loc[:, feature_list]
+					df_test_total = pd.concat([df_test_total, df_test])
 					with open(self.input()[rep][f"Model_{fold}"].path, "rb") as f:
 						model = pickle.load(f)
 
@@ -1469,9 +1470,9 @@ class ShapleyValues(luigi.Task):
 			#combining results from all iterations
 			shap_values = np.array(list_shap_values[0])
 			for i in range(1,len(list_shap_values)):
-				shap_values = np.concatenate((shap_values,np.array(list_shap_values[i])),axis=1)
+				shap_values = np.concatenate((shap_values,np.array(list_shap_values[i])),axis=0)
 
-			shap.summary_plot(shap_values[1], df_test_total, show=False)
+			shap.summary_plot(shap_values, df_test_total, show=False)
 			plt.savefig(self.output().path)
 		elif self.ext_val == 'Yes':
 			df_train = pd.read_excel(self.input()[rep][f"Train_{fold}"].path)
