@@ -8,6 +8,7 @@ import sklearn.metrics as sk_m
 import scipy.stats as sc_st
 import logging
 import sys
+import shutil
 
 import luigi
 import contextlib
@@ -1304,6 +1305,7 @@ class BestMLModelReport(luigi.Task):
 	list_ML = luigi.ListParameter(default=list(ML_info.keys()))
 	ext_val = luigi.Parameter(default='No')
 	all_ML_importances = luigi.BoolParameter(default=True)
+	all_shap_values = luigi.BoolParameter(default=True)
 
 	def requires(self):
 		requirements = {}
@@ -1312,6 +1314,8 @@ class BestMLModelReport(luigi.Task):
 			requirements[i+'_threshold'] = ThresholdPoints(clf_or_score = i, wf_name = self.wf_name, list_ML = self.list_ML, ext_val=self.ext_val)
 			if self.all_ML_importances:
 				requirements[i+'_importances'] = MDAFeatureImportances(clf_name = i, wf_name = self.wf_name, ext_val=self.ext_val)
+			if self.all_shap_values:
+				requirements[i+'_shap'] = ShapleyValues(clf_name = i, wf_name = self.wf_name, ext_val=self.ext_val)
 		return requirements
 
 	def run(self):
@@ -1352,6 +1356,12 @@ class BestMLModelReport(luigi.Task):
 				with open(prerequisite.output().path, 'r') as f3:
 					for line in f3.readlines():
 						f.write(line)
+			if self.all_shap_values:
+				shutil.copy(self.input()[best_ml+'_shap'].path, os.path.join(report_path,self.wf_name,"BestML_Model_ShapValues.png"))
+			else:
+				prerequisite = ShapleyValues(clf_name = best_ml, wf_name = self.wf_name, ext_val = self.ext_val)
+				luigi.build([prerequisite], local_scheduler = False)
+				shutil.copy(prerequisite.output().path, os.path.join(report_path,self.wf_name,"BestML_Model_ShapValues.png"))
 
 	def output(self):
 		try:
@@ -1417,6 +1427,75 @@ class BestRSReport(luigi.Task):
 			return luigi.LocalTarget(os.path.join(report_path,self.wf_name,f"BestRS_report_{self.wf_name}.txt"))
 		elif self.ext_val  == 'Yes':
 			return luigi.LocalTarget(os.path.join(report_path,self.wf_name,f"BestRS_report_{self.wf_name}_EXT.txt"))
+
+
+class ShapleyValues(luigi.Task):
+	clf_name = luigi.Parameter()
+	wf_name = luigi.Parameter()
+	ext_val = luigi.Parameter(default='No')
+
+	def requires(self):
+		if self.ext_val == 'No':
+			for rep in range(WF_info[self.wf_name]["cv_repetitions"]):
+				yield CalculateKFold(clf_name = self.clf_name, wf_name = self.wf_name, seed = rep)
+		elif self.ext_val == 'Yes':
+			return {"model":FinalModelAndHyperparameterResults(wf_name = self.wf_name, clf_name = self.clf_name),
+					"data":FillnaExternalDatabase()}
+
+	def run(self):
+		setupLog(self.__class__.__name__)
+
+		feature_list = WF_info[self.wf_name]['feature_list']
+
+		list_shap_values = []
+
+		if self.ext_val == 'No':
+			df_test_total = pd.DataFrame()
+			for rep in range(WF_info[self.wf_name]["cv_repetitions"]):
+				for fold in range(WF_info[self.wf_name]["cv_folds"]):
+					df_train = pd.read_excel(self.input()[rep][f"Train_{fold}"].path)
+					df_test = pd.read_excel(self.input()[rep][f"Test_{fold}"].path)
+					df_test_total = pd.concat([df_test_total, df])
+					with open(self.input()[rep][f"Model_{fold}"].path, "rb") as f:
+						model = pickle.load(f)
+
+					try:
+						explainer = shap.TreeExplainer(model)
+					except:
+						explainer = shap.KernelExplainer(model = lambda x: model.predict_proba(x)[:,1], data = df_train.loc[:,feature_list], link = "identity")
+					shap_values = explainer.shap_values(df_test)
+					list_shap_values.append(shap_values)
+
+			#combining results from all iterations
+			shap_values = np.array(list_shap_values[0])
+			for i in range(1,len(list_shap_values)):
+				shap_values = np.concatenate((shap_values,np.array(list_shap_values[i])),axis=1)
+
+			shap.summary_plot(shap_values[1], df_test_total, show=False)
+			plt.savefig(self.output().path)
+		elif self.ext_val == 'Yes':
+			df_train = pd.read_excel(self.input()[rep][f"Train_{fold}"].path)
+			df_test = pd.read_excel(self.input()["data"].path)
+			with open(self.input()["model"].path, "rb") as f:
+				model = pickle.load(f)
+			try:
+				explainer = shap.TreeExplainer(model)
+			except:
+				explainer = shap.KernelExplainer(model = lambda x: model.predict_proba(x)[:,1], data = df_train.loc[:,feature_list], link = "identity")
+			shap_values = explainer.shap_values(df_test)
+			shap.summary_plot(shap_values, df_test_total, show=False)
+			plt.savefig(self.output().path)
+
+	def output(self):
+		try:
+			os.makedirs(os.path.join(tmp_path,self.__class__.__name__))
+		except:
+			pass
+
+		if self.ext_val == 'No':
+			return luigi.LocalTarget(os.path.join(tmp_path,self.__class__.__name__,f"ShapleyValues_{self.wf_name}_{self.clf_name}.png"))
+		elif self.ext_val == 'Yes':
+			return luigi.LocalTarget(os.path.join(tmp_path,self.__class__.__name__,f"ShapleyValues_{self.wf_name}_{self.clf_name}_EXT.png"))
 
 
 class MDAFeatureImportances(luigi.Task):
