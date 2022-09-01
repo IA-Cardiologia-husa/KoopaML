@@ -951,7 +951,7 @@ class DescriptiveXLS(luigi.Task):
 
 	def output(self):
 		try:
-			os.makedirs(os.path.join(tmp_path, self.wf_name))
+			os.makedirs(os.path.join(tmp_path, self.__class__.__name__))
 		except:
 			pass
 		# if(self.ext_val == 'No'):
@@ -1005,22 +1005,22 @@ class HistogramsPDF(luigi.Task):
 		for f in features:
 			a = np.random.random(200)
 			fig, ax= plt.subplots(figsize=(10,10))
-			f_min = df_filtered.loc[df_filtered[f].notnull()].min()
-			f_max = df_filtered.loc[df_filtered[f].notnull()].max()
-			f_std = df_filtered.loc[df_filtered[f].notnull()].std()
+			f_min = df_filtered.loc[df_filtered[f].notnull(), f].min()
+			f_max = df_filtered.loc[df_filtered[f].notnull(), f].max()
+			f_std = df_filtered.loc[df_filtered[f].notnull(), f].std()
 			if (f_std != 0):
-				ax.hist(df_filtered.loc[df_filtered[f].notnull()&(df_filtered[label]==0)],
+				ax.hist(df_filtered.loc[df_filtered[f].notnull()&(df_filtered[label]==0), f],
 						bins = np.arange(f_min, f_max + f_std/4., f_std/4.),
 						label = f"{label}=0")
-				ax.hist(df_filtered.loc[df_filtered[f].notnull()&(df_filtered[label]==0)],
+				ax.hist(df_filtered.loc[df_filtered[f].notnull()&(df_filtered[label]==1), f],
 						bins = np.arange(f_min, f_max + f_std/4., f_std/4.),
 						label = f"{label}=1", alpha = 0.5)
 				ax.set_title(f)
 				ax.legend()
 			else:
-				ax.hist(df_filtered.loc[df_filtered[f].notnull()&(df_filtered[label]==0)],
+				ax.hist(df_filtered.loc[df_filtered[f].notnull()&(df_filtered[label]==0), f],
 						label = f"{label}=0")
-				ax.hist(df_filtered.loc[df_filtered[f].notnull()&(df_filtered[label]==0)],
+				ax.hist(df_filtered.loc[df_filtered[f].notnull()&(df_filtered[label]==1), f],
 						label = f"{label}=1", alpha = 0.5)
 				ax.set_title(f)
 				ax.legend()
@@ -1031,7 +1031,7 @@ class HistogramsPDF(luigi.Task):
 
 	def output(self):
 		try:
-			os.makedirs(os.path.join(tmp_path, self.wf_name))
+			os.makedirs(os.path.join(tmp_path, self.__class__.__name__))
 		except:
 			pass
 		if(self.ext_val == 'No'):
