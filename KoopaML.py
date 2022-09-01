@@ -10,6 +10,8 @@ import logging
 import sys
 import shutil
 import shap
+import matplotlib.pyplot as plt
+from matplotlib.backends.backend_pdf import PdfPages
 
 import luigi
 import contextlib
@@ -949,6 +951,30 @@ class DescriptiveXLS(luigi.Task):
 
 	def output(self):
 		try:
+			os.makedirs(os.path.join(tmp_path, self.wf_name))
+		except:
+			pass
+		# if(self.ext_val == 'No'):
+		# 	return luigi.LocalTarget(os.path.join(report_path, self.wf_name, f"{self.wf_name}_descriptivo.xlsx"))
+		# elif(self.ext_val == 'Yes'):
+		# 	return luigi.LocalTarget(os.path.join(report_path, self.wf_name, f"{self.wf_name}_descriptivo_EXT.xlsx"))
+		if(self.ext_val == 'No'):
+			return luigi.LocalTarget(os.path.join(tmp_path, self.__class__.__name__, f"{self.wf_name}_descriptivo.xlsx"))
+		elif(self.ext_val == 'Yes'):
+			return luigi.LocalTarget(os.path.join(tmp_path, self.__class__.__name__, f"{self.wf_name}_descriptivo_EXT.xlsx"))
+
+class DescriptiveReport(luigi.Task):
+	wf_name = luigi.Parameter()
+	ext_val = luigi.Parameter(default='No')
+
+	def requires(self):
+		return DescriptiveXLS(wf_name = self.wf_name, ext_val = self.ext_val)
+
+	def run(self):
+		shutil.copy(self.input().path, self.output().path)
+
+	def output(self):
+		try:
 			os.makedirs(os.path.join(report_path, self.wf_name))
 		except:
 			pass
@@ -956,6 +982,82 @@ class DescriptiveXLS(luigi.Task):
 			return luigi.LocalTarget(os.path.join(report_path, self.wf_name, f"{self.wf_name}_descriptivo.xlsx"))
 		elif(self.ext_val == 'Yes'):
 			return luigi.LocalTarget(os.path.join(report_path, self.wf_name, f"{self.wf_name}_descriptivo_EXT.xlsx"))
+
+class HistogramsPDF(luigi.Task):
+	wf_name = luigi.Parameter()
+	ext_val = luigi.Parameter(default='No')
+
+	def requires(self):
+		if(self.ext_val == 'Yes'):
+			return ProcessExternalDatabase()
+		else:
+			return ProcessDatabase()
+
+	def run(self):
+		setupLog(self.__class__.__name__)
+		df_input = pd.read_pickle(self.input()["pickle"].path)
+		df_filtered = WF_info[self.wf_name]["filter_function"](df_input)
+		label = WF_info[self.wf_name]["label_name"]
+		features = WF_info[self.wf_name]["feature_list"]
+
+		file_path = os.path.join(tmp_path, self.wf_name, "histograma_temporal.pdf")
+		pp = PdfPages(file_path)
+		for f in features:
+			a = np.random.random(200)
+			fig, ax= plt.subplots(figsize=(10,10))
+			f_min = df_filtered.loc[df_filtered[f].notnull()].min()
+			f_max = df_filtered.loc[df_filtered[f].notnull()].max()
+			f_std = df_filtered.loc[df_filtered[f].notnull()].std()
+			if (f_std != 0):
+				ax.hist(df_filtered.loc[df_filtered[f].notnull()&(df_filtered[label]==0)],
+						bins = np.arange(f_min, f_max + f_std/4., f_std/4.),
+						label = f"{label}=0")
+				ax.hist(df_filtered.loc[df_filtered[f].notnull()&(df_filtered[label]==0)],
+						bins = np.arange(f_min, f_max + f_std/4., f_std/4.),
+						label = f"{label}=1", alpha = 0.5)
+				ax.set_title(f)
+				ax.legend()
+			else:
+				ax.hist(df_filtered.loc[df_filtered[f].notnull()&(df_filtered[label]==0)],
+						label = f"{label}=0")
+				ax.hist(df_filtered.loc[df_filtered[f].notnull()&(df_filtered[label]==0)],
+						label = f"{label}=1", alpha = 0.5)
+				ax.set_title(f)
+				ax.legend()
+			pp.savefig(fig)
+		pp.close()
+
+		os.rename(file_path, self.output().path)
+
+	def output(self):
+		try:
+			os.makedirs(os.path.join(tmp_path, self.wf_name))
+		except:
+			pass
+		if(self.ext_val == 'No'):
+			return luigi.LocalTarget(os.path.join(tmp_path, self.__class__.__name__, f"{self.wf_name}_histogramas.pdf"))
+		elif(self.ext_val == 'Yes'):
+			return luigi.LocalTarget(os.path.join(tmp_path, self.__class__.__name__, f"{self.wf_name}_histogramas_EXT.pdf"))
+
+class HistogramsReport(luigi.Task):
+	wf_name = luigi.Parameter()
+	ext_val = luigi.Parameter(default='No')
+
+	def requires(self):
+		return HistogramsPDF(wf_name = self.wf_name, ext_val = self.ext_val)
+
+	def run(self):
+		shutil.copy(self.input().path, self.output().path)
+
+	def output(self):
+		try:
+			os.makedirs(os.path.join(report_path, self.wf_name))
+		except:
+			pass
+		if(self.ext_val == 'No'):
+			return luigi.LocalTarget(os.path.join(report_path, self.wf_name, f"{self.wf_name}_histogramas.pdf"))
+		elif(self.ext_val == 'Yes'):
+			return luigi.LocalTarget(os.path.join(report_path, self.wf_name, f"{self.wf_name}_histogramas_EXT.pdf"))
 
 class FinalModelAndHyperparameterResults(luigi.Task):
 	clf_name = luigi.Parameter()
@@ -1787,7 +1889,8 @@ class AllTasks(luigi.Task):
 	def requires(self):
 
 		for it_wf_name in self.list_WF:
-			yield DescriptiveXLS(wf_name = it_wf_name)
+			yield DescriptiveReport(wf_name = it_wf_name)
+			yield HistogramsReport(wf_name = it_wf_name)
 			yield GraphsWF(wf_name = it_wf_name, list_ML=self.list_ML, list_RS=self.list_RS)
 			if(len(self.list_ML) > 0):
 				yield BestMLModelReport(wf_name = it_wf_name, list_ML=self.list_ML)
@@ -1802,7 +1905,8 @@ class AllTasks(luigi.Task):
 				if(RS_info[it_rs_name]['refit_oddratios']=='Yes'):
 					yield FinalRefittedRSAndOddratios(wf_name = it_wf_name, score_name = it_rs_name)
 			if(WF_info[it_wf_name]['external_validation'] == 'Yes'):
-				yield DescriptiveXLS(wf_name = it_wf_name, ext_val = 'Yes')
+				yield DescriptiveReport(wf_name = it_wf_name, ext_val = 'Yes')
+				yield HistogramsReport(wf_name = it_wf_name, ext_val = 'Yes')
 				yield GraphsWF(wf_name = it_wf_name, list_ML=self.list_ML, list_RS=self.list_RS, ext_val = 'Yes')
 				if(len(self.list_ML) > 0):
 					yield BestMLModelReport(wf_name = it_wf_name, list_ML=self.list_ML, ext_val = 'Yes')
