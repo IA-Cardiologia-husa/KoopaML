@@ -1574,8 +1574,9 @@ class ShapleyValues(luigi.Task):
 			for i in range(1,len(list_shap_values)):
 				shap_values = np.concatenate((shap_values,np.array(list_shap_values[i])),axis=0)
 
-			shap.summary_plot(shap_values, df_test_total, show=False)
-			plt.savefig(self.output().path)
+			shap.summary_plot(shap_values, df_test_total, max_display = 100, show=False)
+			plt.savefig(self.output().path, bbox_inches='tight', dpi=300)
+			plt.close()
 		elif self.ext_val == 'Yes':
 			df_train = pd.read_excel(self.input()[rep][f"Train_{fold}"].path)
 			df_test = pd.read_excel(self.input()["data"].path)
@@ -1586,8 +1587,9 @@ class ShapleyValues(luigi.Task):
 			except:
 				explainer = shap.KernelExplainer(model = lambda x: model.predict_proba(x)[:,1], data = df_train.loc[:,feature_list], link = "identity")
 			shap_values = explainer.shap_values(df_test)
-			shap.summary_plot(shap_values, df_test_total, show=False)
-			plt.savefig(self.output().path)
+			shap.summary_plot(shap_values, df_test_total, max_display = 100, show=False)
+			plt.savefig(self.output().path, bbox_inches='tight', dpi=300)
+			plt.close()
 
 	def output(self):
 		try:

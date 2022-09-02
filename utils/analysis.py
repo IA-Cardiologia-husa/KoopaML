@@ -372,6 +372,7 @@ def plot_all_rocs(task_requires, fig_path,title):
 	plt.legend(loc="lower right", fontsize = 15)
 
 	plt.savefig(fig_path)
+	plt.close()
 
 def plot_all_prs(task_requires, fig_path,title):
 	plt.figure(figsize=(10,10))
@@ -411,7 +412,7 @@ def plot_all_prs(task_requires, fig_path,title):
 	plt.legend(loc="lower right", fontsize = 15)
 
 	plt.savefig(fig_path)
-
+	plt.close()
 
 def group_files_analyze(task_requires, clf_name):
 	n_reps=0
