@@ -1000,7 +1000,7 @@ class HistogramsPDF(luigi.Task):
 		label = WF_info[self.wf_name]["label_name"]
 		features = WF_info[self.wf_name]["feature_list"]
 
-		file_path = os.path.join(tmp_path, self.wf_name, "histograma_temporal.pdf")
+		file_path = os.path.join(tmp_path, self.__class__.__name__, "histograma_temporal.pdf")
 		pp = PdfPages(file_path)
 		for f in features:
 			a = np.random.random(200)
