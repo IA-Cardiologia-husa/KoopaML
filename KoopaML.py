@@ -295,7 +295,7 @@ class ExternalValidation(luigi.Task):
 
 	def run(self):
 		setupLog(self.__class__.__name__)
-		df_input = pd.read_pickle(self.input()["data"]["pickle"].path)
+		external_data = pd.read_pickle(self.input()["data"]["pickle"].path)
 		features = WF_info[self.wf_name]["feature_list"]
 		label = WF_info[self.wf_name]["label_name"]
 		with open(self.input()["clf"].path, 'rb') as f:
@@ -306,7 +306,7 @@ class ExternalValidation(luigi.Task):
 		Y_prob = clf.predict_proba(X)[:,1]
 
 		X['True Label'] = Y
-		X = Y_prob
+		X['Predicted Probability'] = Y_prob
 		X.to_excel(self.output().path)
 
 	def output(self):
@@ -678,7 +678,7 @@ class Evaluate_ML(luigi.Task):
 					df_aux = pd.read_excel(self.input()[repetition][f'Test_{fold}'].path)
 					df = pd.concat([df, df_aux])
 		elif (self.ext_val == 'Yes'):
-			df = pd.read_excel(self.input().path)
+			df = pd.read_excel(self.input()[0].path)
 			df['Repetition'] = 0
 			df['Fold'] = 0
 
@@ -1008,7 +1008,7 @@ class HistogramsPDF(luigi.Task):
 			f_min = df_filtered.loc[df_filtered[f].notnull(), f].min()
 			f_max = df_filtered.loc[df_filtered[f].notnull(), f].max()
 			f_std = df_filtered.loc[df_filtered[f].notnull(), f].std()
-			if (f_std != 0):
+			if (f_std != 0) & (np.isnan(f_std)==False)::
 				ax.hist(df_filtered.loc[df_filtered[f].notnull()&(df_filtered[label]==0), f],
 						bins = np.arange(f_min, f_max + f_std/4., f_std/4.),
 						label = f"{label}=0")
@@ -1542,7 +1542,7 @@ class ShapleyValues(luigi.Task):
 			for rep in range(WF_info[self.wf_name]["cv_repetitions"]):
 				yield CalculateKFold(clf_name = self.clf_name, wf_name = self.wf_name, seed = rep)
 		elif self.ext_val == 'Yes':
-			return {"model":FinalModelAndHyperparameterResults(wf_name = self.wf_name, clf_name = self.clf_name),
+			yield {"model":FinalModelAndHyperparameterResults(wf_name = self.wf_name, clf_name = self.clf_name),
 					"data":FillnaExternalDatabase()}
 
 	def run(self):
@@ -1578,8 +1578,8 @@ class ShapleyValues(luigi.Task):
 			plt.savefig(self.output().path, bbox_inches='tight', dpi=300)
 			plt.close()
 		elif self.ext_val == 'Yes':
-			df_train = pd.read_excel(self.input()[rep][f"Train_{fold}"].path)
-			df_test = pd.read_excel(self.input()["data"].path)
+			df_train = pd.read_excel(self.input()[0][f"Train_{fold}"].path)
+			df_test = pd.read_excel(self.input()[0]["data"].path)
 			with open(self.input()["model"].path, "rb") as f:
 				model = pickle.load(f)
 			try:
@@ -1619,7 +1619,7 @@ class MDAFeatureImportances(luigi.Task):
 			for rep in range(WF_info[self.wf_name]["cv_repetitions"]):
 				yield CalculateKFold(clf_name = self.clf_name, wf_name = self.wf_name, seed = rep)
 		elif self.ext_val == 'Yes':
-			return {"model":FinalModelAndHyperparameterResults(wf_name = self.wf_name, clf_name = self.clf_name),
+			yield {"model":FinalModelAndHyperparameterResults(wf_name = self.wf_name, clf_name = self.clf_name),
 					"data":FillnaExternalDatabase()}
 
 	def run(self):
@@ -1660,8 +1660,8 @@ class MDAFeatureImportances(luigi.Task):
 				mda2[feat] = mda2[feat]/(WF_info[self.wf_name]["cv_repetitions"]*WF_info[self.wf_name]["cv_folds"]*self.n_iterations)
 		elif self.ext_val == 'Yes':
 			# df_train = pd.read_excel(self.input()[rep][f"Train_{fold}"].path)
-			df_test = pd.read_excel(self.input()["data"].path)
-			with open(self.input()["model"].path, "rb") as f:
+			df_test = pd.read_excel(self.input()[0]["data"].path)
+			with open(self.input()[0]["model"].path, "rb") as f:
 				model = pickle.load(f)
 
 			for feat in feature_list:
