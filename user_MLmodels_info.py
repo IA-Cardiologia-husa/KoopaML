@@ -5,35 +5,43 @@
 # formal_name: name to be used in plots and report
 #
 # In this archive we provide 4 examples:
-# RF for Random Forest
 # BT for Boosted Trees
-# LR for Logistic Regression
-# RF_pipeline for a Random Forest with hyperparameter tuning including the choice of feature selection strategy
+# LR for Logistic Regression with Simple Imputer
+# RF for Random Forest with KNN imputer
+# LR_SCL_HypTuning for Logistic Regression with Hyperparameter tuning
+
 
 import sklearn.ensemble as sk_en
 import sklearn.linear_model as sk_lm
 import sklearn.pipeline as sk_pl
+import sklearn.impute as sk_im
 import xgboost as xgb
 from utils.featureselecter import FeatureSelecter
 
 ML_info ={}
 
-ML_info['RF'] = {'formal_name': 'Random Forest',
-					'clf': sk_en.RandomForestClassifier(n_estimators = 1000, max_features = 'auto')}
 ML_info['BT'] = {'formal_name': 'XGBoost',
-					'clf': xgb.XGBClassifier(n_estimators=1000)}
+				 'clf': xgb.XGBClassifier(n_estimators=1000),
+				 'calibration':None}
+
+pipeline_lr = sk_pl.Pipeline(steps=[("im",sk_im.SimpleImputer()),("lr",sk_lm.LogisticRegression())])
+
 ML_info['LR'] = {'formal_name': 'Logistic Regression',
-					'clf': sk_lm.LogisticRegression()}
-# ML_info['polyLR'] = {'formal_name': 'PolyFeatures LR',
-# 					'clf': sk_pl.Pipeline(steps=[('polyf',sk_pre.PolynomialFeatures(degree=3, include_bias=False)),
-#                              ('lr', sk_lm.LogisticRegression(penalty='l2',C=1, max_iter=10000))]),
-# 					'calibration':None}
+				 'clf': pipeline_lr,
+				 'calibration':None}
 
+pipeline_rf = sk_pl.Pipeline(steps=[("knn_im",sk_im.KNNImputer()),("rf",sk_en.RandomForestClassifier(n_estimators = 1000, max_features = 'auto'))])
 
-# pipeline_rf = sk_pl.Pipeline(steps=[("fs",FeatureSelecter()),("rf",sk_en.RandomForestClassifier(n_estimators = 1000,  max_features = 'auto'))])
-# grid_params_rf=[{'fs__method':['eq','sfm_rf', 'skb_10'],'rf__n_estimators':[100,1000],
-# 					'rf__max_features':[1,'auto'], 'rf__criterion':['gini','entropy'], 'rf__max_depth':[None, 1,2,5]}]
-# tuned_rf=sk_ms.GridSearchCV(pipeline_rf,grid_params_rf, cv=10,scoring ='roc_auc', return_train_score=False, verbose=1)
-#
-# ML_info['RF_pipeline'] = {'formal_name': 'Random Forest (Hyperparameter Tuning)',
-# 						  'clf': tuned_rf}
+ML_info['RF'] = {'formal_name': 'Random Forest',
+				 'clf': pipeline_rf,
+				 'calibration':None}
+
+pipeline_lr = sk_pl.Pipeline(steps=[("im",sk_im.SimpleImputer()),('scl',sk_pp.StandardScaler()),('lr', sk_lm.LogisticRegression())])
+grid_params_lr=[{'lr__penalty':['l1', 'l2'], 'lr__C':[0.1,1.,10.,100.], 'lr__solver':['saga']},
+				{'lr__penalty':['elasticnet'], 'lr__l1_ratio':[0.5], 'lr__C':[0.1,1.,10.,100.], 'lr__solver':['saga']},
+				{'lr__penalty':['none'], 'lr__solver':['saga']}]
+tuned_lr=sk_ms.GridSearchCV(pipeline_lr,grid_params_lr, cv=10,scoring ='roc_auc', return_train_score=False, verbose=1)
+
+ML_info['LR_SCL_HypTuning'] = {'formal_name': 'LR (Standard Scaler and hyperparameters)',
+					'clf': tuned_lr,
+					'calibratrion':None}
