@@ -1008,7 +1008,7 @@ class HistogramsPDF(luigi.Task):
 			f_min = df_filtered.loc[df_filtered[f].notnull(), f].min()
 			f_max = df_filtered.loc[df_filtered[f].notnull(), f].max()
 			f_std = df_filtered.loc[df_filtered[f].notnull(), f].std()
-			if (f_std != 0) & (np.isnan(f_std)==False)::
+			if (f_std != 0) & (np.isnan(f_std)==False):
 				ax.hist(df_filtered.loc[df_filtered[f].notnull()&(df_filtered[label]==0), f],
 						bins = np.arange(f_min, f_max + f_std/4., f_std/4.),
 						label = f"{label}=0")
@@ -1543,7 +1543,8 @@ class ShapleyValues(luigi.Task):
 				yield CalculateKFold(clf_name = self.clf_name, wf_name = self.wf_name, seed = rep)
 		elif self.ext_val == 'Yes':
 			yield {"model":FinalModelAndHyperparameterResults(wf_name = self.wf_name, clf_name = self.clf_name),
-					"data":FillnaExternalDatabase()}
+					"test_data":FilterPreprocessExternalDatabase(self.wf_name),
+					"train_data":FilterPreprocessDatabase(self.wf_name)}
 
 	def run(self):
 		setupLog(self.__class__.__name__)
@@ -1578,16 +1579,21 @@ class ShapleyValues(luigi.Task):
 			plt.savefig(self.output().path, bbox_inches='tight', dpi=300)
 			plt.close()
 		elif self.ext_val == 'Yes':
-			df_train = pd.read_excel(self.input()[0][f"Train_{fold}"].path)
-			df_test = pd.read_excel(self.input()[0]["data"].path)
-			with open(self.input()["model"].path, "rb") as f:
+			df_filtered_train = pd.read_pickle(self.input()[0]["train_data"]["pickle"].path)
+			df_filtered_test = pd.read_pickle(self.input()[0]["test_data"]["pickle"].path)
+			features = WF_info[self.wf_name]["feature_list"]
+
+			df_train = df_filtered_train.loc[:,features]
+			df_test = df_filtered_test.loc[:,features]
+
+			with open(self.input()[0]["model"].path, "rb") as f:
 				model = pickle.load(f)
 			try:
 				explainer = shap.TreeExplainer(model)
 			except:
 				explainer = shap.KernelExplainer(model = lambda x: model.predict_proba(x)[:,1], data = df_train.loc[:,feature_list], link = "identity")
 			shap_values = explainer.shap_values(df_test)
-			shap.summary_plot(shap_values, df_test_total, max_display = 100, show=False)
+			shap.summary_plot(shap_values, df_test, max_display = 100, show=False)
 			plt.savefig(self.output().path, bbox_inches='tight', dpi=300)
 			plt.close()
 
@@ -1620,7 +1626,8 @@ class MDAFeatureImportances(luigi.Task):
 				yield CalculateKFold(clf_name = self.clf_name, wf_name = self.wf_name, seed = rep)
 		elif self.ext_val == 'Yes':
 			yield {"model":FinalModelAndHyperparameterResults(wf_name = self.wf_name, clf_name = self.clf_name),
-					"data":FillnaExternalDatabase()}
+					"test_data":FilterPreprocessExternalDatabase(self.wf_name),
+					"train_data":FilterPreprocessDatabase(self.wf_name)}
 
 	def run(self):
 		setupLog(self.__class__.__name__)
@@ -1660,15 +1667,21 @@ class MDAFeatureImportances(luigi.Task):
 				mda2[feat] = mda2[feat]/(WF_info[self.wf_name]["cv_repetitions"]*WF_info[self.wf_name]["cv_folds"]*self.n_iterations)
 		elif self.ext_val == 'Yes':
 			# df_train = pd.read_excel(self.input()[rep][f"Train_{fold}"].path)
-			df_test = pd.read_excel(self.input()[0]["data"].path)
+			# df_filtered_train = pd.read_pickle(self.input()[0]["train_data"]["pickle"].path)
+			df_filtered_test = pd.read_pickle(self.input()[0]["test_data"]["pickle"].path)
+			features = WF_info[self.wf_name]["feature_list"]
+
+			# df_train = df_filtered_train.loc[:,features]
+			df_test = df_filtered_test.loc[:,features]
 			with open(self.input()[0]["model"].path, "rb") as f:
 				model = pickle.load(f)
 
+			label = WF_info[self.wf_name]["label_name"]
+			true_label = df_test[label].values
+			pred_prob_original = model.predict_proba(df_test)[:,1]
+			aucroc_original = sk_m.roc_auc_score(true_label_original[~np.isnan(true_label)].astype(bool),pred_prob_original[~np.isnan(true_label)])
 			for feat in feature_list:
 				df_shuffled = df_test.copy()
-				true_label = df_shuffled["True Label"].values
-				pred_prob_original = df_shuffled["Predicted Probability"].values
-				aucroc_original = sk_m.roc_auc_score(true_label[~np.isnan(true_label)].astype(bool),pred_prob[~np.isnan(true_label)])
 
 				for i in range(self.n_iterations):
 					df_shuffled[feat] = np.random.permutation(df_test[feat].values)
