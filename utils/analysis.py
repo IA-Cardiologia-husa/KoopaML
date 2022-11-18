@@ -24,19 +24,53 @@ def create_descriptive_xls(data, wf_name, label_name):
 
 	for i in data.columns:
 		if i in dict_var.keys():
-			if(sorted(list(data.loc[data[i].notnull(),i].unique())) == [0,1]):
-				t0 = list(data[i]).count(0)
-				t1 = list(data[i]).count(1)
-				f00 = list(data.loc[data[j]==0,i]).count(0)
-				f01 = list(data.loc[data[j]==0,i]).count(1)
-				f10 = list(data.loc[data[j]==1,i]).count(0)
-				f11 = list(data.loc[data[j]==1,i]).count(1)
+			# if(sorted(list(data.loc[data[i].notnull(),i].unique())) == [0,1]):
+			# 	t0 = list(data[i]).count(0)
+			# 	t1 = list(data[i]).count(1)
+			# 	f00 = list(data.loc[data[j]==0,i]).count(0)
+			# 	f01 = list(data.loc[data[j]==0,i]).count(1)
+			# 	f10 = list(data.loc[data[j]==1,i]).count(0)
+			# 	f11 = list(data.loc[data[j]==1,i]).count(1)
+			# 	pvalue = sc_st.fisher_exact([[f00,f01],[f10,f11]])[1]
+			#
+			# 	dt = data[i].astype(float).describe()
+			# 	d0 = data.loc[data[j]==0,i].astype(float).describe()
+			# 	d1 = data.loc[data[j]==1,i].astype(float).describe()
+			# 	row = {'Name':dict_var[i], 'N':(t0+t1), 'Mean':f"{t1} ({dt['mean']:.1%})",
+			# 		  j+'_0_N':d0['count'],j+'_0_Mean':f"{f01} ({d0['mean']:.1%})",
+			# 		  j+'_1_N':d1['count'],j+'_1_Mean':f"{f11} ({d1['mean']:.1%})",
+			# 		  'p-value':f'{pvalue:.3f}'}
+			# 	row_list.append(row)
+			#
+			# else:
+			# 	pvalue = sc_st.ttest_ind(data.loc[data[j]==0, i].astype(float),
+			# 							  data.loc[data[j]==1, i].astype(float),
+			# 							  nan_policy='omit')[1]
+			#
+			# 	dt = data[i].astype(float).describe()
+			# 	d0 = data.loc[data[j]==0, i].astype(float).describe()
+			# 	d1 = data.loc[data[j]==1, i].astype(float).describe()
+			#
+			# 	row = {'Name':dict_var[i], 'N':dt['count'], 'Mean':f'{dt["mean"]:.1f}±{dt["std"]:.1f}',
+			# 		   j+'_0_N':d0['count'], j+'_0_Mean':f'{d0["mean"]:.1f}±{d0["std"]:.1f}',
+			# 		   j+'_1_N':d1['count'], j+'_1_Mean':f'{d1["mean"]:.1f}±{d1["std"]:.1f}',
+			# 		   'p-value':f'{pvalue:.3f}'}
+			# 	row_list.append(row)
+			if(len(list(data.loc[data[i].notnull(),i].unique())) == 2):
+				negative_class = sorted(list(data.loc[data[i].notnull(),i].unique()))[0]
+				positive_class = sorted(list(data.loc[data[i].notnull(),i].unique()))[1]
+				t0 = list(data[i]).count(negative_class)
+				t1 = list(data[i]).count(positive_class)
+				f00 = list(data.loc[data[j]==0,i]).count(negative_class)
+				f01 = list(data.loc[data[j]==0,i]).count(positive_class)
+				f10 = list(data.loc[data[j]==1,i]).count(negative_class)
+				f11 = list(data.loc[data[j]==1,i]).count(positive_class)
 				pvalue = sc_st.fisher_exact([[f00,f01],[f10,f11]])[1]
 
 				dt = data[i].astype(float).describe()
 				d0 = data.loc[data[j]==0,i].astype(float).describe()
 				d1 = data.loc[data[j]==1,i].astype(float).describe()
-				row = {'Name':dict_var[i], 'N':(t0+t1), 'Mean':f"{t1} ({dt['mean']:.1%})",
+				row = {'Name':f"{dict_var[i]} = {positive_class}", 'N':(t0+t1), 'Mean':f"{t1} ({dt['mean']:.1%})",
 					  j+'_0_N':d0['count'],j+'_0_Mean':f"{f01} ({d0['mean']:.1%})",
 					  j+'_1_N':d1['count'],j+'_1_Mean':f"{f11} ({d1['mean']:.1%})",
 					  'p-value':f'{pvalue:.3f}'}

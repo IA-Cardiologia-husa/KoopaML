@@ -425,10 +425,11 @@ class CreateFolds(luigi.Task):
 				i+=1
 		elif (cv_type == 'groupkfold'):
 			data = filter_function(df_input)
+			data = sk_u.shuffle(data, random_state=self.seed)
 			X = data.loc[:,features]
 			Y = data.loc[:,[label]].astype(bool)
 			G = data.loc[:, group_label]
-			X, Y, G = sk_u.shuffle(X,Y,G, random_state=self.seed)
+
 			gkf = sk_ms.GroupKFold(cv_folds)
 			i=0
 			for train_index, test_index in gkf.split(X,Y,G):
@@ -1197,13 +1198,13 @@ class AllModels_PairedTTest(luigi.Task):
 						for rep in range(n_reps):
 							for fold in range(n_folds):
 								true_label1 = df1.loc[(df1['Repetition']==rep)&(df1['Fold']==fold), 'True Label'].values
-								pred_prob1 = df1.loc[(df1['Repetition']==rep)&(df1['Fold']==fold), 'Predicted Probabily'].values
+								pred_prob1 = df1.loc[(df1['Repetition']==rep)&(df1['Fold']==fold), 'Predicted Probability'].values
 								tl1 = true_label1[~np.isnan(true_label1)]
 								pp1 = pred_prob1[~np.isnan(true_label1)]
 								auc1 = sk_m.roc_auc_score(tl1,pp1)
 
 								#True labels for the same workflow should be the same and there is no need to load the ones from the second
-								pred_prob2 = df2.loc[(df2['Repetition']==rep)&(df1['Fold']==fold), 'Predicted Probabily'].values
+								pred_prob2 = df2.loc[(df2['Repetition']==rep)&(df1['Fold']==fold), 'Predicted Probability'].values
 								pp2 = pred_prob2[~np.isnan(true_label1)]
 								auc2 = sk_m.roc_auc_score(tl1,pp2)
 
@@ -1558,17 +1559,29 @@ class ShapleyValues(luigi.Task):
 			for rep in range(WF_info[self.wf_name]["cv_repetitions"]):
 				for fold in range(WF_info[self.wf_name]["cv_folds"]):
 					df_train = pd.read_excel(self.input()[rep][f"Train_{fold}"].path)
+					#If the dataset is too big (we have considered greater than 500), we select a random sample of it
+					ind = df_train.index
+					if len(ind) > 500:
+						ind = np.random.choice(ind, 500, replace = False)
+						df_train = df_train.loc[ind]
+
 					df_test = pd.read_excel(self.input()[rep][f"Test_{fold}"].path).loc[:, feature_list]
+					#If the test dataset is too big (we have considered greater than 100), we select a random sample of it
+					ind = df_test.index
+					if len(ind) > 100:
+						ind = np.random.choice(ind, 100, replace = False)
+						df_test = df_test.loc[ind]
+
 					df_test_total = pd.concat([df_test_total, df_test])
 					with open(self.input()[rep][f"Model_{fold}"].path, "rb") as f:
 						model = pickle.load(f)
-
 					try:
 						explainer = shap.TreeExplainer(model)
 					except:
 						explainer = shap.KernelExplainer(model = lambda x: model.predict_proba(x)[:,1], data = df_train.loc[:,feature_list], link = "identity")
 					shap_values = explainer.shap_values(df_test)
 					list_shap_values.append(shap_values)
+
 
 			#combining results from all iterations
 			shap_values = np.array(list_shap_values[0])
@@ -1670,16 +1683,17 @@ class MDAFeatureImportances(luigi.Task):
 			# df_filtered_train = pd.read_pickle(self.input()[0]["train_data"]["pickle"].path)
 			df_filtered_test = pd.read_pickle(self.input()[0]["test_data"]["pickle"].path)
 			features = WF_info[self.wf_name]["feature_list"]
+			label = WF_info[self.wf_name]["label_name"]
 
 			# df_train = df_filtered_train.loc[:,features]
 			df_test = df_filtered_test.loc[:,features]
+			true_label_original = df_filtered_test[label].values
+
 			with open(self.input()[0]["model"].path, "rb") as f:
 				model = pickle.load(f)
 
-			label = WF_info[self.wf_name]["label_name"]
-			true_label = df_test[label].values
 			pred_prob_original = model.predict_proba(df_test)[:,1]
-			aucroc_original = sk_m.roc_auc_score(true_label_original[~np.isnan(true_label)].astype(bool),pred_prob_original[~np.isnan(true_label)])
+			aucroc_original = sk_m.roc_auc_score(true_label_original[~np.isnan(true_label_original)].astype(bool),pred_prob_original[~np.isnan(true_label_original)])
 			for feat in feature_list:
 				df_shuffled = df_test.copy()
 
