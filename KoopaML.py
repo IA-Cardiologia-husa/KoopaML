@@ -1187,7 +1187,7 @@ class AllModels_PairedTTest(luigi.Task):
 				for clf_or_score2 in self.list_ML+self.list_RS:
 					if (clf_or_score1 != clf_or_score2):
 						df1 = pd.read_excel(self.input()[clf_or_score1]['xls'].path)
-						df2 = pd.read_excel(self.input()[clf_or_score1]['xls'].path)
+						df2 = pd.read_excel(self.input()[clf_or_score2]['xls'].path)
 						score=0
 						score2=0
 
