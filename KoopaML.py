@@ -307,14 +307,16 @@ class ExternalValidation(luigi.Task):
 
 		X['True Label'] = Y
 		X['Predicted Probability'] = Y_prob
-		X.to_excel(self.output().path)
+		X.to_excel(self.output()["xls"].path)
+		X.to_pickle(self.output()["pickle"].path)
 
 	def output(self):
 		try:
 			os.makedirs(os.path.join(tmp_path,self.__class__.__name__))
 		except:
 			pass
-		return luigi.LocalTarget(os.path.join(tmp_path,self.__class__.__name__,f"ExternalValidation_PredProb_{self.wf_name}_{self.clf_name}.xlsx"))
+		return {"xls": luigi.LocalTarget(os.path.join(tmp_path,self.__class__.__name__,f"ExternalValidation_PredProb_{self.wf_name}_{self.clf_name}.xlsx")),
+				"pickle": luigi.LocalTarget(os.path.join(tmp_path,self.__class__.__name__,f"ExternalValidation_PredProb_{self.wf_name}_{self.clf_name}.pickle"))}
 
 class ExternalValidationRS(luigi.Task):
 	score_name = luigi.Parameter()
@@ -446,8 +448,10 @@ class CreateFolds(luigi.Task):
 			i=0
 			for train_index, test_index in sgkf.split(X,Y,G):
 				data_train, data_test = data.iloc[train_index], data.iloc[test_index]
-				data_train.to_excel(self.output()[f'Train_{i}'].path)
-				data_test.to_excel(self.output()[f'Test_{i}'].path)
+				data_train.to_excel(self.output()[f'Train_{i}_excel'].path)
+				data_test.to_excel(self.output()[f'Test_{i}_excel'].path)
+				data_train.to_pickle(self.output()[f'Train_{i}'].path)
+				data_test.to_pickle(self.output()[f'Test_{i}'].path)
 				i+=1
 		else:
 			raise('incompatible crossvalidation type')
@@ -459,8 +463,10 @@ class CreateFolds(luigi.Task):
 			pass
 		dic = {}
 		for i in range(WF_info[self.wf_name]["cv_folds"]):
-			dic[f"Train_{i}"] = luigi.LocalTarget(os.path.join(tmp_path,self.__class__.__name__,self.wf_name,f"RepetitionNo{self.seed:03d}",f"Train_Fold_{i:02d}.xlsx"))
-			dic[f"Test_{i}"] = luigi.LocalTarget(os.path.join(tmp_path,self.__class__.__name__,self.wf_name,f"RepetitionNo{self.seed:03d}",f"Test_Fold_{i:02d}.xlsx"))
+			dic[f"Train_{i}"] = luigi.LocalTarget(os.path.join(tmp_path,self.__class__.__name__,self.wf_name,f"RepetitionNo{self.seed:03d}",f"Train_Fold_{i:02d}.pickle"))
+			dic[f"Test_{i}"] = luigi.LocalTarget(os.path.join(tmp_path,self.__class__.__name__,self.wf_name,f"RepetitionNo{self.seed:03d}",f"Test_Fold_{i:02d}.pickle"))
+			dic[f"Train_{i}_excel"] = luigi.LocalTarget(os.path.join(tmp_path,self.__class__.__name__,self.wf_name,f"RepetitionNo{self.seed:03d}",f"Train_Fold_{i:02d}.xlsx"))
+			dic[f"Test_{i}_excel"] = luigi.LocalTarget(os.path.join(tmp_path,self.__class__.__name__,self.wf_name,f"RepetitionNo{self.seed:03d}",f"Test_Fold_{i:02d}.xlsx"))
 		return dic
 
 class CalculateKFold(luigi.Task):
@@ -485,8 +491,8 @@ class CalculateKFold(luigi.Task):
 		calibration = ML_info[self.clf_name]["calibration"]
 
 		for i in range(folds):
-			df_train = pd.read_excel(self.input()[f'Train_{i}'].path)
-			df_test = pd.read_excel(self.input()[f'Test_{i}'].path)
+			df_train = pd.read_pickle(self.input()[f'Train_{i}'].path)
+			df_test = pd.read_pickle(self.input()[f'Test_{i}'].path)
 			X_train, X_test = df_train.loc[:,features], df_test.loc[:,features]
 			Y_train, Y_test = df_train.loc[:,[label]].astype(bool), df_test.loc[:,[label]].astype(bool)
 			if ((cv_type == 'groupkfold') or (cv_type=='stratifiedgroupkfold')):
@@ -551,8 +557,10 @@ class CalculateKFold(luigi.Task):
 			X_train['Predicted Probability'] = Y_prob_train
 			X_test['Predicted Probability'] = Y_prob_test
 
-			X_train.to_excel(self.output()[f"Train_{i}"].path)
-			X_test.to_excel(self.output()[f"Test_{i}"].path)
+			X_train.to_excel(self.output()[f"Train_{i}_excel"].path)
+			X_test.to_excel(self.output()[f"Test_{i}_excel"].path)
+			X_train.to_pickle(self.output()[f"Train_{i}"].path)
+			X_test.to_pickle(self.output()[f"Test_{i}"].path)
 
 			with open(self.output()[f"Model_{i}"].path,'wb') as f:
 				pickle.dump(calibrated_clf, f, pickle.HIGHEST_PROTOCOL)
@@ -564,8 +572,10 @@ class CalculateKFold(luigi.Task):
 			pass
 		dic = {}
 		for i in range(WF_info[self.wf_name]["cv_folds"]):
-			dic[f"Train_{i}"] = luigi.LocalTarget(os.path.join(tmp_path,self.__class__.__name__,self.wf_name,self.clf_name,f"RepetitionNo{self.seed:03d}",f"Train_Results_{i:02d}.xlsx"))
-			dic[f"Test_{i}"] = luigi.LocalTarget(os.path.join(tmp_path,self.__class__.__name__,self.wf_name,self.clf_name,f"RepetitionNo{self.seed:03d}",f"Test_Results_{i:02d}.xlsx"))
+			dic[f"Train_{i}"] = luigi.LocalTarget(os.path.join(tmp_path,self.__class__.__name__,self.wf_name,self.clf_name,f"RepetitionNo{self.seed:03d}",f"Train_Results_{i:02d}.pickle"))
+			dic[f"Test_{i}"] = luigi.LocalTarget(os.path.join(tmp_path,self.__class__.__name__,self.wf_name,self.clf_name,f"RepetitionNo{self.seed:03d}",f"Test_Results_{i:02d}.pickle"))
+			dic[f"Train_{i}_excel"] = luigi.LocalTarget(os.path.join(tmp_path,self.__class__.__name__,self.wf_name,self.clf_name,f"RepetitionNo{self.seed:03d}",f"Train_Results_{i:02d}.xlsx"))
+			dic[f"Test_{i}_excel"] = luigi.LocalTarget(os.path.join(tmp_path,self.__class__.__name__,self.wf_name,self.clf_name,f"RepetitionNo{self.seed:03d}",f"Test_Results_{i:02d}.xlsx"))
 			dic[f"Model_{i}"] = luigi.LocalTarget(os.path.join(tmp_path,self.__class__.__name__,self.wf_name,self.clf_name,f"RepetitionNo{self.seed:03d}",f"{self.clf_name}_r{self.seed}_f{i}.pickle"))
 		return dic
 
@@ -588,8 +598,8 @@ class RiskScore_KFold(luigi.Task):
 
 		#TODO Eliminate folds and repetitions here and afterwards, it does not make sense with risk scores
 		for i in range(folds):
-			df_test = pd.read_excel(self.input()[f'Test_{i}'].path)
-			df_train = pd.read_excel(self.input()[f'Train_{i}'].path)
+			df_test = pd.read_pickle(self.input()[f'Test_{i}'].path)
+			df_train = pd.read_pickle(self.input()[f'Train_{i}'].path)
 
 			Y_prob = pd.Series(0, index=df_test.index)
 			for feat in feature_oddratio_dict.keys():
@@ -599,7 +609,8 @@ class RiskScore_KFold(luigi.Task):
 			df_test['Predicted Probability'] = Y_prob
 			df_test['Repetition'] = self.seed
 			df_test['Fold'] = i
-			df_test.to_excel(self.output()[f"Test_{i}"].path)
+			df_test.to_excel(self.output()[f"Test_{i}_excel"].path)
+			df_test.to_pickle(self.output()[f"Test_{i}"].path)
 
 	def output(self):
 		try:
@@ -608,7 +619,8 @@ class RiskScore_KFold(luigi.Task):
 			pass
 		dic = {}
 		for i in range(WF_info[self.wf_name]["cv_folds"]):
-			dic[f"Test_{i}"] = luigi.LocalTarget(os.path.join(tmp_path,self.__class__.__name__,self.wf_name,self.score_name,f"RepetitionNo{self.seed:03d}",f"Test_Results_{i:02d}.xlsx"))
+			dic[f"Test_{i}_excel"] = luigi.LocalTarget(os.path.join(tmp_path,self.__class__.__name__,self.wf_name,self.score_name,f"RepetitionNo{self.seed:03d}",f"Test_Results_{i:02d}.xlsx"))
+			dic[f"Test_{i}"] = luigi.LocalTarget(os.path.join(tmp_path,self.__class__.__name__,self.wf_name,self.score_name,f"RepetitionNo{self.seed:03d}",f"Test_Results_{i:02d}.pickle"))
 		return dic
 
 # class RefittedRiskScore_KFold(luigi.Task):
@@ -672,14 +684,14 @@ class Evaluate_ML(luigi.Task):
 		setupLog(self.__class__.__name__)
 
 		if (self.ext_val == 'No'):
-			df_aux = pd.read_excel(self.input()[0][f'Test_{0}'].path)
+			df_aux = pd.read_pickle(self.input()[0][f'Test_{0}'].path)
 			df = pd.DataFrame(columns = df_aux.columns)
 			for repetition in range(len(self.input())):
 				for fold in range(WF_info[self.wf_name]["cv_folds"]):
-					df_aux = pd.read_excel(self.input()[repetition][f'Test_{fold}'].path)
+					df_aux = pd.read_pickle(self.input()[repetition][f'Test_{fold}'].path)
 					df = pd.concat([df, df_aux])
 		elif (self.ext_val == 'Yes'):
-			df = pd.read_excel(self.input()[0].path)
+			df = pd.read_pickle(self.input()[0]["pickle"].path)
 			df['Repetition'] = 0
 			df['Fold'] = 0
 
@@ -744,6 +756,7 @@ class Evaluate_ML(luigi.Task):
 						"aucpr_95ci_high": averaging_aucpr+c*std_error_aucpr}
 
 		df.to_excel(self.output()["xls"].path)
+		df.to_pickle(self.output()["pickle"].path)
 
 		with open(self.output()["auc_results"].path, 'wb') as f:
 			# Pickle the 'data' dictionary using the highest protocol available.
@@ -765,6 +778,7 @@ class Evaluate_ML(luigi.Task):
 			pass
 
 		return {"xls": luigi.LocalTarget(os.path.join(tmp_path,self.__class__.__name__,prefix+self.wf_name,f"Unfolded_df_{prefix}{self.clf_name}.xlsx")),
+				"pickle": luigi.LocalTarget(os.path.join(tmp_path,self.__class__.__name__,prefix+self.wf_name,f"Unfolded_df_{prefix}{self.clf_name}.pickle")),
 				"auc_results": luigi.LocalTarget(os.path.join(tmp_path,self.__class__.__name__,prefix+self.wf_name,f"AUC_results_{prefix}{self.clf_name}.pickle")),
 				"auc_results_txt": luigi.LocalTarget(os.path.join(tmp_path,self.__class__.__name__,prefix+self.wf_name,f"AUC_results_{prefix}{self.clf_name}.txt"))}
 
@@ -794,14 +808,14 @@ class EvaluateRiskScore(luigi.Task):
 		setupLog(self.__class__.__name__)
 
 		if (self.ext_val == 'No'):
-			df_aux = pd.read_excel(self.input()[0][f'Test_{0}'].path)
+			df_aux = pd.read_pickle(self.input()[0][f'Test_{0}'].path)
 			df = pd.DataFrame(columns = df_aux.columns)
 			for repetition in range(len(self.input())):
 				for fold in range(WF_info[self.wf_name]["cv_folds"]):
-					df_aux = pd.read_excel(self.input()[repetition][f'Test_{fold}'].path)
+					df_aux = pd.read_pickle(self.input()[repetition][f'Test_{fold}'].path)
 					df = pd.concat([df, df_aux])
 		elif (self.ext_val == 'Yes'):
-			df = pd.read_excel(self.input().path)
+			df = pd.read_pickle(self.input().path)
 			df['Repetition'] = 0
 			df['Fold'] = 0
 
@@ -866,6 +880,7 @@ class EvaluateRiskScore(luigi.Task):
 						"aucpr_95ci_high": averaging_aucpr+c*std_error_aucpr}
 
 		df.to_excel(self.output()["xls"].path)
+		df.to_pickle(self.output()["pickle"].path)
 
 		with open(self.output()["auc_results"].path, 'wb') as f:
 			# Pickle the 'data' dictionary using the highest protocol available.
@@ -887,6 +902,7 @@ class EvaluateRiskScore(luigi.Task):
 			pass
 
 		return {"xls": luigi.LocalTarget(os.path.join(tmp_path,self.__class__.__name__,prefix+self.wf_name,f"Unfolded_df_{prefix}{self.score_name}.xlsx")),
+				"pickle": luigi.LocalTarget(os.path.join(tmp_path,self.__class__.__name__,prefix+self.wf_name,f"Unfolded_df_{prefix}{self.score_name}.pickle")),
 				"auc_results": luigi.LocalTarget(os.path.join(tmp_path,self.__class__.__name__,prefix+self.wf_name,f"AUC_results_{prefix}{self.score_name}.pickle")),
 				"auc_results_txt": luigi.LocalTarget(os.path.join(tmp_path,self.__class__.__name__,prefix+self.wf_name,f"AUC_results_{prefix}{self.score_name}.txt"))}
 
@@ -1186,8 +1202,8 @@ class AllModels_PairedTTest(luigi.Task):
 			for clf_or_score1 in self.list_ML+self.list_RS:
 				for clf_or_score2 in self.list_ML+self.list_RS:
 					if (clf_or_score1 != clf_or_score2):
-						df1 = pd.read_excel(self.input()[clf_or_score1]['xls'].path)
-						df2 = pd.read_excel(self.input()[clf_or_score2]['xls'].path)
+						df1 = pd.read_pickle(self.input()[clf_or_score1]['xls'].path)
+						df2 = pd.read_pickle(self.input()[clf_or_score2]['xls'].path)
 						score=0
 						score2=0
 
@@ -1340,7 +1356,7 @@ class ThresholdPoints(luigi.Task):
 	def run(self):
 		setupLog(self.__class__.__name__)
 
-		df = pd.read_excel(self.input()["xls"].path)
+		df = pd.read_pickle(self.input()["pickle"].path)
 		true_label = df['True Label'].values
 		pred_prob = df['Predicted Probability'].values
 
@@ -1558,14 +1574,14 @@ class ShapleyValues(luigi.Task):
 			df_test_total = pd.DataFrame()
 			for rep in range(WF_info[self.wf_name]["cv_repetitions"]):
 				for fold in range(WF_info[self.wf_name]["cv_folds"]):
-					df_train = pd.read_excel(self.input()[rep][f"Train_{fold}"].path)
+					df_train = pd.read_pickle(self.input()[rep][f"Train_{fold}"].path)
 					#If the dataset is too big (we have considered greater than 500), we select a random sample of it
 					ind = df_train.index
 					if len(ind) > 500:
 						ind = np.random.choice(ind, 500, replace = False)
 						df_train = df_train.loc[ind]
 
-					df_test = pd.read_excel(self.input()[rep][f"Test_{fold}"].path).loc[:, feature_list]
+					df_test = pd.read_pickle(self.input()[rep][f"Test_{fold}"].path).loc[:, feature_list]
 					#If the test dataset is too big (we have considered greater than 100), we select a random sample of it
 					ind = df_test.index
 					if len(ind) > 100:
@@ -1655,8 +1671,8 @@ class MDAFeatureImportances(luigi.Task):
 		if self.ext_val == 'No':
 			for rep in range(WF_info[self.wf_name]["cv_repetitions"]):
 				for fold in range(WF_info[self.wf_name]["cv_folds"]):
-					# df_train = pd.read_excel(self.input()[rep][f"Train_{fold}"].path)
-					df_test = pd.read_excel(self.input()[rep][f"Test_{fold}"].path)
+					# df_train = pd.read_pickle(self.input()[rep][f"Train_{fold}"].path)
+					df_test = pd.read_pickle(self.input()[rep][f"Test_{fold}"].path)
 					with open(self.input()[rep][f"Model_{fold}"].path, "rb") as f:
 						model = pickle.load(f)
 

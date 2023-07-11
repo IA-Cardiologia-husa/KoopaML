@@ -12,9 +12,8 @@ from user_variables_info import dict_var
 from user_MLmodels_info import ML_info
 from user_RiskScores_info import RS_info
 
-def create_descriptive_xls(data, wf_name, label_name):
+def create_descriptive_xls(data, wf_name, label):
 
-	j=label_name
 	row_list =[]
 
 	if (len(dict_var.keys())==0):
@@ -27,33 +26,33 @@ def create_descriptive_xls(data, wf_name, label_name):
 			# if(sorted(list(data.loc[data[i].notnull(),i].unique())) == [0,1]):
 			# 	t0 = list(data[i]).count(0)
 			# 	t1 = list(data[i]).count(1)
-			# 	f00 = list(data.loc[data[j]==0,i]).count(0)
-			# 	f01 = list(data.loc[data[j]==0,i]).count(1)
-			# 	f10 = list(data.loc[data[j]==1,i]).count(0)
-			# 	f11 = list(data.loc[data[j]==1,i]).count(1)
+			# 	f00 = list(data.loc[data[label]==0,i]).count(0)
+			# 	f01 = list(data.loc[data[label]==0,i]).count(1)
+			# 	f10 = list(data.loc[data[label]==1,i]).count(0)
+			# 	f11 = list(data.loc[data[label]==1,i]).count(1)
 			# 	pvalue = sc_st.fisher_exact([[f00,f01],[f10,f11]])[1]
 			#
 			# 	dt = data[i].astype(float).describe()
-			# 	d0 = data.loc[data[j]==0,i].astype(float).describe()
-			# 	d1 = data.loc[data[j]==1,i].astype(float).describe()
+			# 	d0 = data.loc[data[label]==0,i].astype(float).describe()
+			# 	d1 = data.loc[data[label]==1,i].astype(float).describe()
 			# 	row = {'Name':dict_var[i], 'N':(t0+t1), 'Mean':f"{t1} ({dt['mean']:.1%})",
-			# 		  j+'_0_N':d0['count'],j+'_0_Mean':f"{f01} ({d0['mean']:.1%})",
-			# 		  j+'_1_N':d1['count'],j+'_1_Mean':f"{f11} ({d1['mean']:.1%})",
+			# 		  label+'_0_N':d0['count'],label+'_0_Mean':f"{f01} ({d0['mean']:.1%})",
+			# 		  label+'_1_N':d1['count'],label+'_1_Mean':f"{f11} ({d1['mean']:.1%})",
 			# 		  'p-value':f'{pvalue:.3f}'}
 			# 	row_list.append(row)
 			#
 			# else:
-			# 	pvalue = sc_st.ttest_ind(data.loc[data[j]==0, i].astype(float),
-			# 							  data.loc[data[j]==1, i].astype(float),
+			# 	pvalue = sc_st.ttest_ind(data.loc[data[label]==0, i].astype(float),
+			# 							  data.loc[data[label]==1, i].astype(float),
 			# 							  nan_policy='omit')[1]
 			#
 			# 	dt = data[i].astype(float).describe()
-			# 	d0 = data.loc[data[j]==0, i].astype(float).describe()
-			# 	d1 = data.loc[data[j]==1, i].astype(float).describe()
+			# 	d0 = data.loc[data[label]==0, i].astype(float).describe()
+			# 	d1 = data.loc[data[label]==1, i].astype(float).describe()
 			#
 			# 	row = {'Name':dict_var[i], 'N':dt['count'], 'Mean':f'{dt["mean"]:.1f}±{dt["std"]:.1f}',
-			# 		   j+'_0_N':d0['count'], j+'_0_Mean':f'{d0["mean"]:.1f}±{d0["std"]:.1f}',
-			# 		   j+'_1_N':d1['count'], j+'_1_Mean':f'{d1["mean"]:.1f}±{d1["std"]:.1f}',
+			# 		   label+'_0_N':d0['count'], label+'_0_Mean':f'{d0["mean"]:.1f}±{d0["std"]:.1f}',
+			# 		   label+'_1_N':d1['count'], label+'_1_Mean':f'{d1["mean"]:.1f}±{d1["std"]:.1f}',
 			# 		   'p-value':f'{pvalue:.3f}'}
 			# 	row_list.append(row)
 			if(len(list(data.loc[data[i].notnull(),i].unique())) == 2):
@@ -61,33 +60,33 @@ def create_descriptive_xls(data, wf_name, label_name):
 				positive_class = sorted(list(data.loc[data[i].notnull(),i].unique()))[1]
 				t0 = list(data[i]).count(negative_class)
 				t1 = list(data[i]).count(positive_class)
-				f00 = list(data.loc[data[j]==0,i]).count(negative_class)
-				f01 = list(data.loc[data[j]==0,i]).count(positive_class)
-				f10 = list(data.loc[data[j]==1,i]).count(negative_class)
-				f11 = list(data.loc[data[j]==1,i]).count(positive_class)
+				f00 = list(data.loc[data[label]==0,i]).count(negative_class)
+				f01 = list(data.loc[data[label]==0,i]).count(positive_class)
+				f10 = list(data.loc[data[label]==1,i]).count(negative_class)
+				f11 = list(data.loc[data[label]==1,i]).count(positive_class)
 				pvalue = sc_st.fisher_exact([[f00,f01],[f10,f11]])[1]
 
 				dt = data[i].astype(float).describe()
-				d0 = data.loc[data[j]==0,i].astype(float).describe()
-				d1 = data.loc[data[j]==1,i].astype(float).describe()
+				d0 = data.loc[data[label]==0,i].astype(float).describe()
+				d1 = data.loc[data[label]==1,i].astype(float).describe()
 				row = {'Name':f"{dict_var[i]} = {positive_class}", 'N':(t0+t1), 'Mean':f"{t1} ({dt['mean']:.1%})",
-					  j+'_0_N':d0['count'],j+'_0_Mean':f"{f01} ({d0['mean']:.1%})",
-					  j+'_1_N':d1['count'],j+'_1_Mean':f"{f11} ({d1['mean']:.1%})",
+					  label+'_0_N':d0['count'],label+'_0_Mean':f"{f01} ({d0['mean']:.1%})",
+					  label+'_1_N':d1['count'],label+'_1_Mean':f"{f11} ({d1['mean']:.1%})",
 					  'p-value':f'{pvalue:.3f}'}
 				row_list.append(row)
 
 			else:
-				pvalue = sc_st.ttest_ind(data.loc[data[j]==0, i].astype(float),
-										  data.loc[data[j]==1, i].astype(float),
+				pvalue = sc_st.ttest_ind(data.loc[data[label]==0, i].astype(float),
+										  data.loc[data[label]==1, i].astype(float),
 										  nan_policy='omit')[1]
 
 				dt = data[i].astype(float).describe()
-				d0 = data.loc[data[j]==0, i].astype(float).describe()
-				d1 = data.loc[data[j]==1, i].astype(float).describe()
+				d0 = data.loc[data[label]==0, i].astype(float).describe()
+				d1 = data.loc[data[label]==1, i].astype(float).describe()
 
 				row = {'Name':dict_var[i], 'N':dt['count'], 'Mean':f'{dt["mean"]:.1f}±{dt["std"]:.1f}',
-					   j+'_0_N':d0['count'], j+'_0_Mean':f'{d0["mean"]:.1f}±{d0["std"]:.1f}',
-					   j+'_1_N':d1['count'], j+'_1_Mean':f'{d1["mean"]:.1f}±{d1["std"]:.1f}',
+					   label+'_0_N':d0['count'], label+'_0_Mean':f'{d0["mean"]:.1f}±{d0["std"]:.1f}',
+					   label+'_1_N':d1['count'], label+'_1_Mean':f'{d1["mean"]:.1f}±{d1["std"]:.1f}',
 					   'p-value':f'{pvalue:.3f}'}
 				row_list.append(row)
 
@@ -95,10 +94,10 @@ def create_descriptive_xls(data, wf_name, label_name):
 	if(len(row_list) > 0):
 		df_temp = pd.DataFrame(row_list).set_index('Name')
 
-		indices = [x for x in dict_var.values() if x in df_temp.index]
-		columnas=['N', 'Mean', j+'_0_N', j+'_0_Mean',j+'_1_N',j+'_1_Mean','p-value']
+		# indices = [x for x in dict_var.values() if x in df_temp.index]
+		columnas=['N', 'Mean', label+'_0_N', label+'_0_Mean',label+'_1_N',label+'_1_Mean','p-value']
 
-		df_temp = df_temp.loc[indices,columnas]
+		df_temp = df_temp.loc[:,columnas]
 		return df_temp
 	else:
 		return -1
