@@ -400,8 +400,10 @@ class CreateFolds(luigi.Task):
 			i=0
 			for train_index, test_index in kf.split(X,Y):
 				data_train, data_test = data.iloc[train_index], data.iloc[test_index]
-				data_train.to_excel(self.output()[f'Train_{i}'].path)
-				data_test.to_excel(self.output()[f'Test_{i}'].path)
+				data_train.to_excel(self.output()[f'Train_{i}_excel'].path)
+				data_test.to_excel(self.output()[f'Test_{i}_excel'].path)
+				data_train.to_pickle(self.output()[f'Train_{i}'].path)
+				data_test.to_pickle(self.output()[f'Test_{i}'].path)
 				i+=1
 		elif(cv_type == 'unfilteredkfold'):
 			data = df_input
@@ -411,8 +413,10 @@ class CreateFolds(luigi.Task):
 			i=0
 			for train_index, test_index in kf.split(X,Y):
 				data_train, data_test = data.iloc[train_index], data.iloc[test_index]
-				data_train.to_excel(self.output()[f'Train_{i}'].path)
-				data_test.to_excel(self.output()[f'Test_{i}'].path)
+				data_train.to_excel(self.output()[f'Train_{i}_excel'].path)
+				data_test.to_excel(self.output()[f'Test_{i}_excel'].path)
+				data_train.to_pickle(self.output()[f'Train_{i}'].path)
+				data_test.to_pickle(self.output()[f'Test_{i}'].path)
 				i+=1
 		elif(cv_type == 'stratifiedkfold'):
 			data = filter_function(df_input)
@@ -422,8 +426,10 @@ class CreateFolds(luigi.Task):
 			i=0
 			for train_index, test_index in skf.split(X,Y):
 				data_train, data_test = data.iloc[train_index], data.iloc[test_index]
-				data_train.to_excel(self.output()[f'Train_{i}'].path)
-				data_test.to_excel(self.output()[f'Test_{i}'].path)
+				data_train.to_excel(self.output()[f'Train_{i}_excel'].path)
+				data_test.to_excel(self.output()[f'Test_{i}_excel'].path)
+				data_train.to_pickle(self.output()[f'Train_{i}'].path)
+				data_test.to_pickle(self.output()[f'Test_{i}'].path)
 				i+=1
 		elif (cv_type == 'groupkfold'):
 			data = filter_function(df_input)
@@ -436,8 +442,10 @@ class CreateFolds(luigi.Task):
 			i=0
 			for train_index, test_index in gkf.split(X,Y,G):
 				data_train, data_test = data.iloc[train_index], data.iloc[test_index]
-				data_train.to_excel(self.output()[f'Train_{i}'].path)
-				data_test.to_excel(self.output()[f'Test_{i}'].path)
+				data_train.to_excel(self.output()[f'Train_{i}_excel'].path)
+				data_test.to_excel(self.output()[f'Test_{i}_excel'].path)
+				data_train.to_pickle(self.output()[f'Train_{i}'].path)
+				data_test.to_pickle(self.output()[f'Test_{i}'].path)
 				i+=1
 		elif (cv_type == 'stratifiedgroupkfold'):
 			data = filter_function(df_input)
@@ -1202,8 +1210,8 @@ class AllModels_PairedTTest(luigi.Task):
 			for clf_or_score1 in self.list_ML+self.list_RS:
 				for clf_or_score2 in self.list_ML+self.list_RS:
 					if (clf_or_score1 != clf_or_score2):
-						df1 = pd.read_pickle(self.input()[clf_or_score1]['xls'].path)
-						df2 = pd.read_pickle(self.input()[clf_or_score2]['xls'].path)
+						df1 = pd.read_pickle(self.input()[clf_or_score1]['pickle'].path)
+						df2 = pd.read_pickle(self.input()[clf_or_score2]['pickle'].path)
 						score=0
 						score2=0
 
@@ -1592,7 +1600,8 @@ class ShapleyValues(luigi.Task):
 					with open(self.input()[rep][f"Model_{fold}"].path, "rb") as f:
 						model = pickle.load(f)
 					try:
-						explainer = shap.TreeExplainer(model)
+						masker = shap.maskers.Independent(data = df_train.loc[:,feature_list])
+						explainer = shap.Explainer(model, masker)
 					except:
 						explainer = shap.KernelExplainer(model = lambda x: model.predict_proba(x)[:,1], data = df_train.loc[:,feature_list], link = "identity")
 					shap_values = explainer.shap_values(df_test)
@@ -1617,8 +1626,10 @@ class ShapleyValues(luigi.Task):
 
 			with open(self.input()[0]["model"].path, "rb") as f:
 				model = pickle.load(f)
+
 			try:
-				explainer = shap.TreeExplainer(model)
+				masker = shap.maskers.Independent(data = df_train.loc[:,feature_list])
+				explainer = shap.Explainer(model, masker)
 			except:
 				explainer = shap.KernelExplainer(model = lambda x: model.predict_proba(x)[:,1], data = df_train.loc[:,feature_list], link = "identity")
 			shap_values = explainer.shap_values(df_test)
