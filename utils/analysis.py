@@ -402,7 +402,7 @@ def plot_all_rocs(task_requires, fig_path,title):
 	plt.title(title, fontsize=20)
 	plt.xlabel('1-specificity', fontsize = 15)
 	plt.ylabel('sensitivity', fontsize = 15)
-	plt.legend(loc="lower right", fontsize = 15)
+	plt.legend(loc="lower right", fontsize = 10)
 
 	plt.savefig(fig_path)
 	plt.close()
@@ -442,7 +442,7 @@ def plot_all_prs(task_requires, fig_path,title):
 	plt.title(title, fontsize=20)
 	plt.xlabel('recall (sensitivity)', fontsize = 15)
 	plt.ylabel('precision', fontsize = 15)
-	plt.legend(loc="lower right", fontsize = 15)
+	plt.legend(loc="lower right", fontsize = 10)
 
 	plt.savefig(fig_path)
 	plt.close()

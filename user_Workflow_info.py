@@ -7,9 +7,10 @@
 # filter_function:	Function to filter the Dataframe. If we want to use only the subject of the dataframe with Var3=1,
 # 					we would write: lambda df: df.loc[df['Var3']==1].reset_index(drop=True)
 # 					In case we want no filter, we have to write: lambda df: df
+#  					This is an alterative to WF-specific code in process_database()
 # group_label:		groups for cross-validation. Subjects from the same groups
 #					will appear in the same folds
-# validation_type: 	"kfold", "groupkfold", "stratifiedkfold", "stratifiedgroupkfold",
+# validation_type: 	"kfold", "groupkfold" (repetitions don't work in this scheme), "stratifiedkfold", "stratifiedgroupkfold",
 #					"unfilterdkfold" (for doing the kfold first and then filtering the folds)
 # cv_folds:			For kfolds, the number of folds
 # cv_repetitions:	For kfolds, the number of repetitions

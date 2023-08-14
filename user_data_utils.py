@@ -8,13 +8,17 @@ def load_database():
 def clean_database(df):
 	return df
 
-def process_database(df):
+def process_database(df, wf_name):
 	return df
 
-def fillna_database(df):
-	# It is better to impute missing values on the model pipeline so that
-	# values are filled only with the training folds info during cross-validation
+def load_external_database():
+	# df = pd.read_excel("External Database.xlsx")
 	return df
 
-def preprocess_filtered_database(df, wf_name):
+def clean_external_database(df):
+	df = clean_database(df)
+	return df
+
+def process_external_database(df, wf_name):
+	df = process_database(df, wf_name)
 	return df
