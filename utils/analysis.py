@@ -381,7 +381,7 @@ def plot_all_rocs(task_requires, fig_path,title):
 	color_index=0
 
 	for score in task_requires.keys():
-		df = pd.read_excel(task_requires[score]["xls"].path)
+		df = pd.read_pickle(task_requires[score]["pickle"].path)
 		with open(task_requires[score]["auc_results"].path, 'rb') as f:
 			results_dict=pickle.load(f)
 
@@ -418,7 +418,7 @@ def plot_all_prs(task_requires, fig_path,title):
 	color_index=0
 
 	for score in task_requires.keys():
-		df = pd.read_excel(task_requires[score]["xls"].path)
+		df = pd.read_pickle(task_requires[score]["pickle"].path)
 		with open(task_requires[score]["auc_results"].path, 'rb') as f:
 			results_dict=pickle.load(f)
 

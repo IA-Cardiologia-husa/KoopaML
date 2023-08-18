@@ -617,10 +617,14 @@ class CreateFolds(luigi.Task):
 			data['CustomIndex'] = data.index
 
 			for rep in range(cv_repetitions):
-				data = sk_u.shuffle(data, random_state=rep).reset_index(drop = True)
+				# data = sk_u.shuffle(data, random_state=rep).reset_index(drop = True)
 				X = data.loc[:,features]
 				Y = data.loc[:,[label]].astype(bool)
 				G = data.loc[:, group_label]
+				# n = G.astype('category').cat.codes.max()+1
+				# np.random.seed(rep)
+				# dict_transform = dict(zip(np.arange(n), np.random.choice(np.arange(n), n, replace=False)))
+				# G.astype('category').cat.codes.apply(lambda x: dict_transform[x])
 				gkf = sk_ms.GroupKFold(cv_folds)
 				fold=0
 				for train_index, test_index in gkf.split(X,Y,G):
@@ -1683,14 +1687,16 @@ class AllThresholds(luigi.Task):
 class ShapleyValues(luigi.Task):
 	clf_name = luigi.Parameter()
 	wf_name = luigi.Parameter()
-	ext_val = luigi.Parameter(default='No')
+	ext_val = luigi.Parameter(default='Yes')
 
 	def requires(self):
 		if self.ext_val == 'No':
+			requirements = {'CreateFolds': CreateFolds(wf_name = self.wf_name)}
 			for rep in range(WF_info[self.wf_name]["cv_repetitions"]):
-				yield CalculateKFold(clf_name = self.clf_name, wf_name = self.wf_name, seed = rep)
+				requirements[f'CalculateKFold_{rep}'] =  CalculateKFold(clf_name = self.clf_name, wf_name = self.wf_name, seed = rep)
+			return requirements
 		elif self.ext_val == 'Yes':
-			yield {"model":FinalModelAndHyperparameterResults(wf_name = self.wf_name, clf_name = self.clf_name),
+			return {"model":FinalModelAndHyperparameterResults(wf_name = self.wf_name, clf_name = self.clf_name),
 					"test_data":ProcessExternalDatabase(self.wf_name),
 					"train_data":ProcessDatabase(self.wf_name)}
 
@@ -1703,16 +1709,17 @@ class ShapleyValues(luigi.Task):
 
 		if self.ext_val == 'No':
 			df_test_total = pd.DataFrame()
+			df_folded =  pd.read_pickle(self.input()['CreateFolds']['pickle'].path)
 			for rep in range(WF_info[self.wf_name]["cv_repetitions"]):
 				for fold in range(WF_info[self.wf_name]["cv_folds"]):
-					df_train = pd.read_pickle(self.input()[rep][f"Train_{fold}"].path)
+					df_train = df_folded.loc[df_folded[f'Repetition_{rep}_folds']!=fold, feature_list]
 					#If the dataset is too big (we have considered greater than 500), we select a random sample of it
 					ind = df_train.index
 					if len(ind) > 500:
 						ind = np.random.choice(ind, 500, replace = False)
 						df_train = df_train.loc[ind]
 
-					df_test = pd.read_pickle(self.input()[rep][f"Test_{fold}"].path).loc[:, feature_list]
+					df_test = df_folded.loc[df_folded[f'Repetition_{rep}_folds']!=fold, feature_list]
 					#If the test dataset is too big (we have considered greater than 100), we select a random sample of it
 					ind = df_test.index
 					if len(ind) > 100:
@@ -1720,14 +1727,31 @@ class ShapleyValues(luigi.Task):
 						df_test = df_test.loc[ind]
 
 					df_test_total = pd.concat([df_test_total, df_test])
-					with open(self.input()[rep][f"Model_{fold}"].path, "rb") as f:
+					with open(self.input()[f'CalculateKFold_{rep}'][f"Model_{fold}"].path, "rb") as f:
 						model = pickle.load(f)
-					try:
-						masker = shap.maskers.Independent(data = df_train.loc[:,feature_list])
-						explainer = shap.Explainer(model, masker)
-					except:
-						explainer = shap.KernelExplainer(model = lambda x: model.predict_proba(x)[:,1], data = df_train.loc[:,feature_list], link = "identity")
-					shap_values = explainer.shap_values(df_test)
+
+					masker = shap.maskers.Independent(data =  df_train.loc[:,feature_list])
+					explainer = shap.PermutationExplainer(lambda x: model.predict_proba(x)[:,1], masker, link = shap.links.logit)
+					shap_values = explainer(df_test).values
+
+					# try:
+					# 	if hasattr(model, '__getitem__'):
+					# 		data = df_train.loc[:,feature_list].copy()
+					# 		for i in range(len(model)-1):
+					# 			data = model[i].transform(data)
+					# 		masker = shap.maskers.Independent(data = data)
+					# 		explainer = shap.Explainer(model[-1], masker)
+					# 		data_test = df_test.copy()
+					# 		for i in range(len(model)-1):
+					# 			data_test = model[i].transform(data_test)
+					# 		shap_values = explainer.shap_values(data_test)
+					# 	else:
+					# 		masker = shap.maskers.Independent(data = df_train.loc[:,feature_list])
+					# 		explainer = shap.Explainer(model, masker)
+					# 		shap_values = explainer.shap_values(df_test)
+					# except:
+					# 	explainer = shap.KernelExplainer(model = lambda x: model.predict_proba(x)[:,1], data = df_train.loc[:,feature_list], link = "identity")
+					# 	shap_values = explainer.shap_values(df_test)
 					list_shap_values.append(shap_values)
 
 
@@ -1754,11 +1778,23 @@ class ShapleyValues(luigi.Task):
 				model = pickle.load(f)
 
 			try:
-				masker = shap.maskers.Independent(data = df_train.loc[:,feature_list])
-				explainer = shap.Explainer(model, masker)
+				if hasattr(model, '__getitem__'):
+					data = df_train.loc[:,feature_list]
+					for i in range(len(model)-1):
+						data = model[i].transform(data)
+					masker = shap.maskers.Independent(data = data)
+					explainer = shap.Explainer(model, masker)
+					data_test = df_test
+					for i in range(len(model)-1):
+						data_test = model[i].transform(data_test)
+					shap_values = explainer.shap_values(data_test)
+				else:
+					masker = shap.maskers.Independent(data = df_train.loc[:,feature_list])
+					explainer = shap.Explainer(model, masker)
+					shap_values = explainer.shap_values(df_test)
 			except:
 				explainer = shap.KernelExplainer(model = lambda x: model.predict_proba(x)[:,1], data = df_train.loc[:,feature_list], link = "identity")
-			shap_values = explainer.shap_values(df_test)
+				shap_values = explainer.shap_values(df_test)
 			shap.summary_plot(shap_values, df_test, max_display = 100, show=False)
 			plt.savefig(self.output().path, bbox_inches='tight', dpi=300)
 			plt.close()
@@ -1788,12 +1824,14 @@ class MDAFeatureImportances(luigi.Task):
 		# 	return {'df': FilterPreprocessExternalDatabase(self.wf_name),
 		# 			'clf': FinalModelAndHyperparameterResults(clf_name=self.clf_name, wf_name=self.wf_name)}
 		if self.ext_val == 'No':
+			requirements = {'CreateFolds': CreateFolds(wf_name = self.wf_name)}
 			for rep in range(WF_info[self.wf_name]["cv_repetitions"]):
-				yield CalculateKFold(clf_name = self.clf_name, wf_name = self.wf_name, seed = rep)
+				requirements[f'CalculateKFold_{rep}'] =  CalculateKFold(clf_name = self.clf_name, wf_name = self.wf_name, seed = rep)
 		elif self.ext_val == 'Yes':
-			yield {"model":FinalModelAndHyperparameterResults(wf_name = self.wf_name, clf_name = self.clf_name),
+			requirements = {"model":FinalModelAndHyperparameterResults(wf_name = self.wf_name, clf_name = self.clf_name),
 					"test_data":ProcessExternalDatabase(self.wf_name),
 					"train_data":ProcessDatabase(self.wf_name)}
+		return requirements
 
 	def run(self):
 		setupLog(self.__class__.__name__)
@@ -1806,16 +1844,24 @@ class MDAFeatureImportances(luigi.Task):
 			mda2[feat] = 0
 
 		if self.ext_val == 'No':
+			df_folded = pd.read_pickle(self.input()['CreateFolds']['pickle'].path)
 			for rep in range(WF_info[self.wf_name]["cv_repetitions"]):
 				for fold in range(WF_info[self.wf_name]["cv_folds"]):
 					# df_train = pd.read_pickle(self.input()[rep][f"Train_{fold}"].path)
-					df_test = pd.read_pickle(self.input()[rep][f"Test_{fold}"].path)
-					with open(self.input()[rep][f"Model_{fold}"].path, "rb") as f:
+					# df_test = pd.read_pickle(self.input()[rep][f"Test_{fold}"].path)
+					df_test = df_folded.loc[df_folded[f"Repetition_{rep}_folds"]==fold]
+					df_results = pd.read_pickle(self.input()[f'CalculateKFold_{rep}'][f"Test_{fold}"].path)
+					df_test.set_index("CustomIndex")
+					df_results.set_index("CustomIndex")
+					df_test["Predicted Probability"] = df_results["Predicted Probability"]
+
+					with open(self.input()[f'CalculateKFold_{rep}'][f"Model_{fold}"].path, "rb") as f:
 						model = pickle.load(f)
 
 					for feat in feature_list:
 						df_shuffled = df_test.copy()
-						true_label = df_shuffled["True Label"]
+						label = WF_info[self.wf_name]["label_name"]
+						true_label = df_shuffled[label].astype(int)
 						pred_prob_original = df_shuffled["Predicted Probability"]
 						aucroc_original = sk_m.roc_auc_score(true_label.loc[true_label.notnull()].astype(bool),pred_prob_original.loc[true_label.notnull()])
 
@@ -2019,26 +2065,27 @@ class InterpretationReport(luigi.Task):
 	def run(self):
 		setupLog(self.__class__.__name__)
 
-		if self.best_MDA or self.best_shap:
+		if (self.best_MDA == 'Yes') or (self.best_shap == 'Yes'):
+			auc_ml = {}
 			for i in self.list_ML:
 				with open(self.input()[i]["auc_results"].path, 'rb') as f:
 					results_dict=pickle.load(f)
 					auc_ml[i]=results_dict["avg_aucroc"]
 			best_ml = max(auc_ml.keys(), key=(lambda k: auc_ml[k]))
-			if self.best_MDA:
+			if self.best_MDA == 'Yes':
 				prerequisite = MDAFeatureImportances(clf_name = best_ml, wf_name = self.wf_name, ext_val = self.ext_val)
 				luigi.build([prerequisite], local_scheduler = False)
-				shutil.copy(prerequisite.output().path, self.output['best_mda'].path)
-			if self.best_shap:
+				shutil.copy(prerequisite.output().path, self.output()['best_mda'].path)
+			if self.best_shap == 'Yes':
 				prerequisite = ShapleyValues(clf_name = best_ml, wf_name = self.wf_name, ext_val = self.ext_val)
 				luigi.build([prerequisite], local_scheduler = False)
-				shutil.copy(prerequisite.output().path, self.output['best_shap'].path)
-		if self.all_MDA:
+				shutil.copy(prerequisite.output().path, self.output()['best_shap'].path)
+		if self.all_MDA == 'Yes':
 			for i in self.list_ML:
-				shutil.copy(self.input()[i+'_mda'].path, self.output[i+'_mda'].path)
-		if self.all_shap:
+				shutil.copy(self.input()[i+'_mda'].path, self.output()[i+'_mda'].path)
+		if self.all_shap == 'Yes':
 			for i in self.list_ML:
-				shutil.copy(self.input()[i+'_shap'].path, self.output[i+'_shap'].path)
+				shutil.copy(self.input()[i+'_shap'].path, self.output()[i+'_shap'].path)
 
 	def output(self):
 		outputs = {}
@@ -2046,27 +2093,35 @@ class InterpretationReport(luigi.Task):
 			os.makedirs(os.path.join(report_path+f'-{self.datestring}', self.wf_name, "Interpretation"))
 		except:
 			pass
-		if self.best_MDA:
+		if self.best_MDA == 'Yes':
 			outputs['best_mda'] = luigi.LocalTarget(os.path.join(report_path+f'-{self.datestring}', self.wf_name, f"MDA_Importances_BestModel{'_EXT' if self.ext_val == 'Yes' else ''}.txt"))
-		if self.best_shap:
+		if self.best_shap == 'Yes':
 			outputs['best_shap'] = luigi.LocalTarget(os.path.join(report_path+f'-{self.datestring}', self.wf_name, f"Shap_Values_BestModel{'_EXT' if self.ext_val == 'Yes' else ''}.png"))
 		for i in self.list_ML:
-			if self.all_MDA:
+			if self.all_MDA == 'Yes':
 				outputs[i+'_mda'] = luigi.LocalTarget(os.path.join(report_path+f'-{self.datestring}', self.wf_name, "Interpretation", f"MDA_Importances_{i}{'_EXT' if self.ext_val == 'Yes' else ''}.txt"))
-			if self.all_shap:
+			if self.all_shap == 'Yes':
 				outputs[i+'_shap'] = luigi.LocalTarget(os.path.join(report_path+f'-{self.datestring}', self.wf_name, "Interpretation", f"Shap_Values_{i}{'_EXT' if self.ext_val == 'Yes' else ''}.png"))
 		return outputs
+
 
 class AllInterpretationReports(luigi.Task):
 	list_ML = luigi.ListParameter(default=list(ML_info.keys()))
 	list_WF = luigi.ListParameter(default=list(WF_info.keys()))
 	datestring = luigi.Parameter(default=dt.datetime.now().strftime("%y%m%d-%H%M%S"))
 
+	best_MDA = luigi.Parameter(default = 'Yes')
+	all_MDA = luigi.Parameter(default = 'Yes')
+	best_shap = luigi.Parameter(default = 'No')
+	all_shap = luigi.Parameter(default = 'No')
+
 	def requires(self):
 		for it_wf_name in self.list_WF:
-			yield InterpretationReport(wf_name = it_wf_name, list_ML=self.list_ML, datestring=self.datestring)
+			yield InterpretationReport(wf_name = it_wf_name, list_ML=self.list_ML, datestring=self.datestring,
+										best_MDA = self.best_MDA, best_shap = self.best_shap, all_MDA = self.all_MDA, all_shap = self.all_shap)
 			if(WF_info[it_wf_name]['external_validation'] == 'Yes'):
-				yield InterpretationReport(wf_name = it_wf_name, list_ML=self.list_ML, ext_val = 'Yes', datestring=self.datestring)
+				yield InterpretationReport(wf_name = it_wf_name, list_ML=self.list_ML, ext_val = 'Yes', datestring=self.datestring,
+											best_MDA = self.best_MDA, best_shap = self.best_shap, all_MDA = self.all_MDA, all_shap = self.all_shap)
 
 	def run(self):
 		setupLog(self.__class__.__name__)
@@ -2202,6 +2257,10 @@ class AllTasks(luigi.Task):
 	list_RS = luigi.ListParameter(default=list(RS_info.keys()))
 	list_WF = luigi.ListParameter(default=list(WF_info.keys()))
 	datestring = luigi.Parameter(default=dt.datetime.now().strftime("%y%m%d-%H%M%S"))
+	best_MDA = luigi.Parameter(default = 'Yes')
+	all_MDA = luigi.Parameter(default = 'Yes')
+	best_shap = luigi.Parameter(default = 'No')
+	all_shap = luigi.Parameter(default = 'No')
 
 
 	def __init__(self, *args, **kwargs):
@@ -2214,7 +2273,8 @@ class AllTasks(luigi.Task):
 				AllHistograms(list_WF = self.list_WF, datestring=self.datestring),
 				AllModels(list_ML = self.list_ML, list_RS = self.list_RS, list_WF = self.list_WF, datestring=self.datestring),
 				AllPerformanceReports(list_ML = self.list_ML, list_RS = self.list_RS, list_WF = self.list_WF, datestring=self.datestring),
-				AllInterpretationReports(list_ML = self.list_ML, list_WF = self.list_WF, datestring=self.datestring)]
+				AllInterpretationReports(list_ML = self.list_ML, list_WF = self.list_WF, datestring=self.datestring,
+										best_MDA = self.best_MDA, best_shap = self.best_shap, all_MDA = self.all_MDA, all_shap = self.all_shap)]
 
 		# for it_wf_name in self.list_WF:
 		# 	yield DescriptiveReport(wf_name = it_wf_name, datestring = self.datestring)
