@@ -392,11 +392,24 @@ def plot_all_rocs(task_requires, fig_path,title):
 		else:
 			score_name = "ERROR: Unknown score or classifier"
 
-		true_label = df.loc[df['True Label'].notnull(), 'True Label'].astype(bool).values
-		pred_prob = df.loc[df['True Label'].notnull(), 'Predicted Probability'].values
+		# true_label = df.loc[df['True Label'].notnull(), 'True Label'].astype(bool).values
+		# pred_prob = df.loc[df['True Label'].notnull(), 'Predicted Probability'].values
+		#
+		# fpr, tpr, thresholds = sk_m.roc_curve(true_label,pred_prob)
 
-		fpr, tpr, thresholds = sk_m.roc_curve(true_label,pred_prob)
-		plt.plot(fpr, tpr, lw=2, alpha=1, color=cmap(color_index) , label = f'{score_name}: AUC ={results_dict["avg_aucroc"]:1.2f} ({results_dict["aucroc_95ci_low"]:1.2f}-{results_dict["aucroc_95ci_high"]:1.2f})' )
+		roc_divisions = 1001
+		fpr_va = np.linspace(0,1,roc_divisions)
+		tpr_va = np.zeros(roc_divisions)
+		for rep in df['Repetition'].unique():
+			for fold in df['Fold'].unique():
+				true_label = df.loc[df['True Label'].notnull()&(df['Repetition']==rep)&(df['Fold']==fold), 'True Label'].astype(bool).values
+				pred_prob = df.loc[df['True Label'].notnull()&(df['Repetition']==rep)&(df['Fold']==fold), 'Predicted Probability'].values
+				fpr, tpr, thresholds = sk_m.roc_curve(true_label,pred_prob)
+				tpr_va += np.interp(fpr_va, fpr, tpr)
+		tpr_va = tpr_va / (len(df['Repetition'].unique())*len(df['Fold'].unique()))
+
+
+		plt.plot(fpr_va, tpr_va, lw=2, alpha=1, color=cmap(color_index) , label = f'{score_name}: AUC ={results_dict["avg_aucroc"]:1.2f} ({results_dict["aucroc_95ci_low"]:1.2f}-{results_dict["aucroc_95ci_high"]:1.2f})' )
 		color_index+=1
 
 	plt.title(title, fontsize=20)

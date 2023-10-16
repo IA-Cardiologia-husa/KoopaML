@@ -44,3 +44,26 @@ tuned_lr=sk_ms.GridSearchCV(pipeline_lr,grid_params_lr, cv=10,scoring ='roc_auc'
 
 ML_info['LR_SCL_HypTuning'] = {'formal_name': 'LR (Standard Scaler, Power Transformer, and hyperparameters)',
 							   'clf': tuned_lr}
+
+class RiskScore():
+	def __init__(self, feature_oddratio_dict, refit = False):
+		self.feature_oddratio_dict = feature_oddratio_dict
+
+	def fit(self, X, y):
+		self.threshold = 0
+		for feat in self.feature_oddratio_dict.keys():
+			self.threshold += self.feature_oddratio_dict[feat]*(X.loc[y==0, feat].mean()/2.+X.loc[y==1, feat].mean()/2.)
+		return self.threshold
+
+	def decision_function(self, X):
+		Y_prob = 0
+		for feat in self.feature_oddratio_dict.keys():
+			Y_prob += self.feature_oddratio_dict[feat]*X.loc[:,feat]
+		return Y_prob
+
+	def predict(self, X):
+		return self.decision_function(X) > self.norm
+
+# ML_info['RS'] = {'formal_name': 'Risk Score',
+# 				 'clf': sk_pl.Pipeline(steps=[("im",sk_im.SimpleImputer(strategy='median').set_output(transform="pandas")),
+# 				 							  ('rs',RiskScore({'Var1':1, 'Var2':2, 'Var3':-1}))])}

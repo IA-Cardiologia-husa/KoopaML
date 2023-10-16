@@ -73,7 +73,7 @@ class LoadDatabase(luigi.Task):
 		df_input.to_pickle(self.output()["pickle"].path)
 		writer = pd.ExcelWriter(self.output()["xls"].path, engine='xlsxwriter')
 		df_input.to_excel(writer, sheet_name='Sheet1')
-		writer.save()
+		writer.close()
 
 	def output(self):
 		try:
@@ -93,7 +93,7 @@ class CleanDatabase(luigi.Task):
 		df_output.to_pickle(self.output()["pickle"].path)
 		writer = pd.ExcelWriter(self.output()["xls"].path, engine='xlsxwriter')
 		df_output.to_excel(writer, sheet_name='Sheet1')
-		writer.save()
+		writer.close()
 
 
 	def output(self):
@@ -116,7 +116,7 @@ class ProcessDatabase(luigi.Task):
 		df_output.to_pickle(self.output()["pickle"].path)
 		writer = pd.ExcelWriter(self.output()["xls"].path, engine='xlsxwriter')
 		df_output.to_excel(writer, sheet_name='Sheet1')
-		writer.save()
+		writer.close()
 
 
 	def output(self):
@@ -138,7 +138,7 @@ class ProcessDatabase(luigi.Task):
 # 		df_output.to_pickle(self.output()["pickle"].path)
 # 		writer = pd.ExcelWriter(self.output()["xls"].path, engine='xlsxwriter')
 # 		df_output.to_excel(writer, sheet_name='Sheet1')
-# 		writer.save()
+# 		writer.close()
 #
 #
 # 	def output(self):
@@ -164,7 +164,7 @@ class ProcessDatabase(luigi.Task):
 # 		df_preprocessed.to_pickle(self.output()["pickle"].path)
 # 		writer = pd.ExcelWriter(self.output()["xls"].path, engine='xlsxwriter')
 # 		df_preprocessed.to_excel(writer, sheet_name='Sheet1')
-# 		writer.save()
+# 		writer.close()
 #
 # 	def output(self):
 # 		try:
@@ -181,7 +181,7 @@ class LoadExternalDatabase(luigi.Task):
 		df_input.to_pickle(self.output()["pickle"].path)
 		writer = pd.ExcelWriter(self.output()["xls"].path, engine='xlsxwriter')
 		df_input.to_excel(writer, sheet_name='Sheet1')
-		writer.save()
+		writer.close()
 
 	def output(self):
 		try:
@@ -201,7 +201,7 @@ class CleanExternalDatabase(luigi.Task):
 		df_output.to_pickle(self.output()["pickle"].path)
 		writer = pd.ExcelWriter(self.output()["xls"].path, engine='xlsxwriter')
 		df_output.to_excel(writer, sheet_name='Sheet1')
-		writer.save()
+		writer.close()
 
 
 	def output(self):
@@ -219,11 +219,11 @@ class ProcessExternalDatabase(luigi.Task):
 	def run(self):
 		setupLog(self.__class__.__name__)
 		df_input = pd.read_pickle(self.input()["pickle"].path)
-		df_output = process_external_database(df_input)
+		df_output = process_external_database(df_input, self.wf_name)
 		df_output.to_pickle(self.output()["pickle"].path)
 		writer = pd.ExcelWriter(self.output()["xls"].path, engine='xlsxwriter')
 		df_output.to_excel(writer, sheet_name='Sheet1')
-		writer.save()
+		writer.close()
 
 
 	def output(self):
@@ -245,7 +245,7 @@ class ProcessExternalDatabase(luigi.Task):
 # 		df_output.to_pickle(self.output()["pickle"].path)
 # 		writer = pd.ExcelWriter(self.output()["xls"].path, engine='xlsxwriter')
 # 		df_output.to_excel(writer, sheet_name='Sheet1')
-# 		writer.save()
+# 		writer.close()
 #
 #
 # 	def output(self):
@@ -271,7 +271,7 @@ class ProcessExternalDatabase(luigi.Task):
 # 		df_preprocessed .to_pickle(self.output()["pickle"].path)
 # 		writer = pd.ExcelWriter(self.output()["xls"].path, engine='xlsxwriter')
 # 		df_preprocessed.to_excel(writer, sheet_name='Sheet1')
-# 		writer.save()
+# 		writer.close()
 #
 #
 # 	def output(self):
@@ -296,12 +296,17 @@ class ExternalValidation(luigi.Task):
 		external_data = pd.read_pickle(self.input()["data"]["pickle"].path)
 		features = WF_info[self.wf_name]["feature_list"]
 		label = WF_info[self.wf_name]["label_name"]
+		filter = WF_info[self.wf_name]["filter_external_validation"]
+		external_data = filter(external_data)
 		with open(self.input()["clf"].path, 'rb') as f:
 			clf = pickle.load(f)
 
 		X = external_data.loc[:,features]
 		Y = external_data.loc[:,[label]]
-		Y_prob = clf.predict_proba(X)[:,1]
+		try:
+			Y_prob = clf.predict_proba(X)[:,1]
+		except:
+			Y_prob = clf.decision_function(X)
 
 		X['True Label'] = Y
 		X['Predicted Probability'] = Y_prob
@@ -749,7 +754,7 @@ class RiskScore_KFold(luigi.Task):
 	wf_name = luigi.Parameter()
 
 	def requires(self):
-		return CreateFolds(seed=self.seed, wf_name = self.wf_name)
+		return CreateFolds(wf_name = self.wf_name)
 
 	def run(self):
 		setupLog(self.__class__.__name__)
@@ -759,19 +764,26 @@ class RiskScore_KFold(luigi.Task):
 		feature_oddratio_dict = RS_info[self.score_name]["feature_oddratio"]
 
 
-		#TODO Eliminate folds and repetitions here and afterwards, it does not make sense with risk scores
+		data = pd.read_pickle(self.input()[f'pickle'].path)
 		for i in range(folds):
-			df_test = pd.read_pickle(self.input()[f'Test_{i}'].path)
-			df_train = pd.read_pickle(self.input()[f'Train_{i}'].path)
+			df_train = data.loc[data[f'Repetition_{self.seed}_folds'] != i]
+			df_test  = data.loc[data[f'Repetition_{self.seed}_folds'] == i]
 
 			Y_prob = pd.Series(0, index=df_test.index)
 			for feat in feature_oddratio_dict.keys():
-				Y_prob += feature_oddratio_dict[feat]*df_test.loc[:,feat].fillna(pd.concat([df_test, df_train])[feat].mean())
+				Y_prob += feature_oddratio_dict[feat]*df_test.loc[:,feat].fillna(pd.concat([df_test, df_train])[feat].median())
+				# Y_prob += feature_oddratio_dict[feat]*df_test.loc[:,feat].fillna(df_train[feat].median())
 
 			df_test['True Label'] = df_test[label].astype(int)
 			df_test['Predicted Probability'] = Y_prob
 			df_test['Repetition'] = self.seed
 			df_test['Fold'] = i
+
+			saved_columns = ['CustomIndex', 'Repetition', 'Fold', 'True Label','Predicted Probability']
+
+			df_test.loc[:,saved_columns].to_excel(self.output()[f"Test_{i}_excel"].path, index=False)
+			df_test.loc[:,saved_columns].to_pickle(self.output()[f"Test_{i}"].path)
+
 			df_test.to_excel(self.output()[f"Test_{i}_excel"].path)
 			df_test.to_pickle(self.output()[f"Test_{i}"].path)
 
@@ -979,7 +991,7 @@ class EvaluateRiskScore(luigi.Task):
 					df_aux = pd.read_pickle(self.input()[repetition][f'Test_{fold}'].path)
 					df = pd.concat([df, df_aux])
 		elif (self.ext_val == 'Yes'):
-			df = pd.read_pickle(self.input().path)
+			df = pd.read_pickle(self.input()[0].path)
 			df['Repetition'] = 0
 			df['Fold'] = 0
 
@@ -1084,7 +1096,10 @@ class ConfidenceIntervalHanleyRS(luigi.Task):
 	def run(self):
 		setupLog(self.__class__.__name__)
 		df_input = pd.read_pickle(self.input()["pickle"].path)
-		df_filtered = WF_info[self.wf_name]["filter_function"](df_input)
+		if self.ext_val == 'No' :
+			df_filtered = WF_info[self.wf_name]["filter_function"](df_input)
+		else:
+			df_filtered = WF_info[self.wf_name]["filter_external_validation"](df_input)
 		(auc, stderr) = AUC_stderr_classic(df_input, label_name=WF_info[self.wf_name]["label_name"], feature_oddratio=RS_info[self.score_name]["feature_oddratio"])
 		ci95_low= auc-1.96*stderr
 		ci95_high= auc+1.96*stderr
@@ -1122,13 +1137,16 @@ class DescriptiveXLS(luigi.Task):
 	def run(self):
 		setupLog(self.__class__.__name__)
 		df_input = pd.read_pickle(self.input()["pickle"].path)
-		df_filtered = WF_info[self.wf_name]["filter_function"](df_input)
+		if self.ext_val == 'No':
+			df_filtered = WF_info[self.wf_name]["filter_function"](df_input)
+		else:
+			df_filtered = WF_info[self.wf_name]["filter_external_validation"](df_input)
 		label = WF_info[self.wf_name]["label_name"]
 
 		df_output=create_descriptive_xls(df_filtered, self.wf_name, label)
 		writer = pd.ExcelWriter(self.output().path, engine='xlsxwriter')
 		df_output.to_excel(writer, sheet_name='Sheet1')
-		writer.save()
+		writer.close()
 
 	def output(self):
 		try:
@@ -1155,7 +1173,10 @@ class HistogramsPDF(luigi.Task):
 	def run(self):
 		setupLog(self.__class__.__name__)
 		df_input = pd.read_pickle(self.input()["pickle"].path)
-		df_filtered = WF_info[self.wf_name]["filter_function"](df_input)
+		if self.ext_val == 'No':
+			df_filtered = WF_info[self.wf_name]["filter_function"](df_input)
+		else:
+			df_filtered = WF_info[self.wf_name]["filter_external_validation"](df_input)
 		label = WF_info[self.wf_name]["label_name"]
 		features = WF_info[self.wf_name]["feature_list"]
 
@@ -1238,12 +1259,12 @@ class FinalModelAndHyperparameterResults(luigi.Task):
 		if hasattr(self.clf, 'best_estimator_'):
 			writer = pd.ExcelWriter(os.path.join(model_path,self.wf_name,f"HyperparameterResults_{self.wf_name}_{self.clf_name}.xlsx"), engine='xlsxwriter')
 			pd.DataFrame(self.clf.cv_results_).to_excel(writer, sheet_name='Sheet1')
-			writer.save()
+			writer.close()
 		elif hasattr(self.clf, '__getitem__'):
 			if hasattr(self.clf[-1], 'best_estimator_'):
 				writer = pd.ExcelWriter(os.path.join(model_path,self.wf_name,f"HyperparameterResults_{self.wf_name}_{self.clf_name}.xlsx"), engine='xlsxwriter')
 				pd.DataFrame(self.clf[-1].cv_results_).to_excel(writer, sheet_name='Sheet1')
-				writer.save()
+				writer.close()
 
 		with open(self.output().path,'wb') as f:
 			pickle.dump(self.clf, f, pickle.HIGHEST_PROTOCOL)
@@ -1573,7 +1594,7 @@ class BestMLModelReport(luigi.Task):
 
 	def output(self):
 		try:
-			os.makedirs(os.path.join(report_path,self.wf_name))
+			os.makedirs(os.path.join(report_path+f'-{self.datestring}',self.wf_name))
 		except:
 			pass
 		if self.ext_val == 'No':
@@ -1629,7 +1650,7 @@ class BestRSReport(luigi.Task):
 					f.write(line)
 	def output(self):
 		try:
-			os.makedirs(os.path.join(report_path,self.wf_name))
+			os.makedirs(os.path.join(report_path+f'-{self.datestring}',self.wf_name))
 		except:
 			pass
 		if self.ext_val == 'No':
@@ -1764,17 +1785,17 @@ class ShapleyValues(luigi.Task):
 			plt.savefig(self.output().path, bbox_inches='tight', dpi=300)
 			plt.close()
 		elif self.ext_val == 'Yes':
-			filter_function = WF_info[self.wf_name]["filter_function"]
-			features = WF_info[self.wf_name]["feature_list"]
-			df_input_train = pd.read_pickle(self.input()[0]["train_data"]["pickle"].path)
-			df_input_test = pd.read_pickle(self.input()[0]["test_data"]["pickle"].path)
+			filter_function = WF_info[self.wf_name]["filter_external_validation"]
+
+			df_input_train = pd.read_pickle(self.input()["train_data"]["pickle"].path)
+			df_input_test = pd.read_pickle(self.input()["test_data"]["pickle"].path)
 			df_filtered_train = filter_function(df_input_train)
 			df_filtered_test = filter_function(df_input_test)
 
-			df_train = df_filtered_train.loc[:,features]
-			df_test = df_filtered_test.loc[:,features]
+			df_train = df_filtered_train.loc[:,feature_list]
+			df_test = df_filtered_test.loc[:,feature_list]
 
-			with open(self.input()[0]["model"].path, "rb") as f:
+			with open(self.input()["model"].path, "rb") as f:
 				model = pickle.load(f)
 
 			try:
@@ -1879,27 +1900,28 @@ class MDAFeatureImportances(luigi.Task):
 				mda2[feat] = mda2[feat]/(WF_info[self.wf_name]["cv_repetitions"]*WF_info[self.wf_name]["cv_folds"]*self.n_iterations)
 		elif self.ext_val == 'Yes':
 
-			features = WF_info[self.wf_name]["feature_list"]
 			label = WF_info[self.wf_name]["label_name"]
-			filter_function = WF_info[self.wf_name]["filter_function"]
+			filter_function = WF_info[self.wf_name]["filter_external_validation"]
 
-			df_input_test = pd.read_pickle(self.input()[0]["test_data"]["pickle"].path)
+			df_input_test = pd.read_pickle(self.input()["test_data"]["pickle"].path)
 			df_filtered_test = filter_function(df_input_test)
 
-			df_test = df_filtered_test.loc[:,features]
 			true_label_original = df_filtered_test[label].values
 
-			with open(self.input()[0]["model"].path, "rb") as f:
+			with open(self.input()["model"].path, "rb") as f:
 				model = pickle.load(f)
 
-			pred_prob_original = model.predict_proba(df_test)[:,1]
+			try:
+				pred_prob_original = model.predict_proba(df_filtered_test.loc[:,feature_list])[:,1]
+			except:
+				pred_prob_original = model.decision_function(df_filtered_test.loc[:,feature_list])
 			aucroc_original = sk_m.roc_auc_score(true_label_original[~np.isnan(true_label_original)].astype(bool),pred_prob_original[~np.isnan(true_label_original)])
 			for feat in feature_list:
-				df_shuffled = df_test.copy()
+				df_shuffled = df_filtered_test.copy()
 				true_label = df_shuffled[label]
 
 				for i in range(self.n_iterations):
-					df_shuffled[feat] = np.random.permutation(df_test[feat].values)
+					df_shuffled[feat] = np.random.permutation(df_filtered_test[feat].values)
 					try:
 						pred_prob = model.predict_proba(df_shuffled.loc[:, feature_list])[:,1]
 					except:

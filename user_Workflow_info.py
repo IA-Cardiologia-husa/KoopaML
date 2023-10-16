@@ -26,7 +26,8 @@
 #						  'validation_type':'stratifiedkfold',
 #						  'cv_folds': 10,
 #						  'cv_repetitions': 10,
-#						  'external_validation': 'No'}
+#						  'external_validation': 'No',
+#						  'filter_external_validation': lambda df: df}
 
 
 WF_info ={}

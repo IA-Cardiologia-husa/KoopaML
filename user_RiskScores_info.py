@@ -7,10 +7,6 @@
 # Example:
 # RS_info = {}
 #
-#RS_info['CHADSVASC'] = {'label_name':'CHADSVASC',
-#						 'formal_name': 'CHA2DS2-VASc'
-# 						 'sign': -1}
-
 # RS_info['CHADSVASC'] = {'feature_oddratio':{'ICC':1,
 # 											'HTA':1,
 # 											'age75':1,
