@@ -1782,8 +1782,12 @@ class ShapleyValues(luigi.Task):
 				shap_values = np.concatenate((shap_values,np.array(list_shap_values[i])),axis=0)
 
 			shap.summary_plot(shap_values, df_test_total, max_display = 100, show=False)
-			plt.savefig(self.output().path, bbox_inches='tight', dpi=300)
+			plt.savefig(self.output()["png"].path, bbox_inches='tight', dpi=300)
 			plt.close()
+			df_test_total.to_pickle(self.output()["pickle_dftest"].path)
+			with open(self.output()["pickle_values"].path, 'wb') as f:
+				pickle.dump(shap_values, f, pickle.HIGHEST_PROTOCOL)
+
 		elif self.ext_val == 'Yes':
 			filter_function = WF_info[self.wf_name]["filter_external_validation"]
 
@@ -1817,19 +1821,26 @@ class ShapleyValues(luigi.Task):
 				explainer = shap.KernelExplainer(model = lambda x: model.predict_proba(x)[:,1], data = df_train.loc[:,feature_list], link = "identity")
 				shap_values = explainer.shap_values(df_test)
 			shap.summary_plot(shap_values, df_test, max_display = 100, show=False)
-			plt.savefig(self.output().path, bbox_inches='tight', dpi=300)
+			plt.savefig(self.output()["png"].path, bbox_inches='tight', dpi=300)
 			plt.close()
+			df_test.to_pickle(self.output()["pickle_dftest"].path)
+			with open(self.output()["pickle_values"].path, 'wb') as f:
+				pickle.dump(shap_values, f, pickle.HIGHEST_PROTOCOL)
 
 	def output(self):
 		try:
-			os.makedirs(os.path.join(tmp_path,self.__class__.__name__))
+			os.makedirs(os.path.join(tmp_path,self.__class__.__name__,self.wf_name))
 		except:
 			pass
 
 		if self.ext_val == 'No':
-			return luigi.LocalTarget(os.path.join(tmp_path,self.__class__.__name__,f"ShapleyValues_{self.wf_name}_{self.clf_name}.png"))
+			return {"png": luigi.LocalTarget(os.path.join(tmp_path,self.__class__.__name__,self.wf_name,f"ShapleyValues_{self.wf_name}_{self.clf_name}.png")),
+					"pickle_values": luigi.LocalTarget(os.path.join(tmp_path,self.__class__.__name__,self.wf_name,f"ShapleyValues_{self.wf_name}_{self.clf_name}.pickle")),
+					"pickle_dftest": luigi.LocalTarget(os.path.join(tmp_path,self.__class__.__name__,self.wf_name,f"dftest_{self.wf_name}_{self.clf_name}.pickle"))}
 		elif self.ext_val == 'Yes':
-			return luigi.LocalTarget(os.path.join(tmp_path,self.__class__.__name__,f"ShapleyValues_{self.wf_name}_{self.clf_name}_EXT.png"))
+			return {"png": luigi.LocalTarget(os.path.join(tmp_path,self.__class__.__name__,self.wf_name,f"ShapleyValues_{self.wf_name}_{self.clf_name}_EXT.png"),
+					"pickle_values": luigi.LocalTarget(os.path.join(tmp_path,self.__class__.__name__,self.wf_name,f"ShapleyValues_{self.wf_name}_{self.clf_name}_EXT.pickle")),
+					"pickle_dftest": luigi.LocalTarget(os.path.join(tmp_path,self.__class__.__name__,self.wf_name,f"dftest_{self.wf_name}_{self.clf_name}.pickle")))
 
 
 class MDAFeatureImportances(luigi.Task):
@@ -1936,10 +1947,19 @@ class MDAFeatureImportances(luigi.Task):
 		# sorted_feats = sorted(feature_list, key= lambda x: mda[feat]/(np.sqrt(mda2[feat]-mda[feat]**2)+1e-14))
 		sorted_feats = sorted(feature_list, key= lambda x: mda[x], reverse=True)
 
-		with open(self.output().path,'w') as f:
+		with open(self.output()['txt'].path,'w') as f:
 			print(f"{'Feature':30.30} {'MDA_norm':10.10} {'MDA':10.10} {'Variation':10.10} {'z-score':10.10}", file=f)
 			for feat in sorted_feats:
 				print(f"{feat:30.30} {mda[feat]/mda[sorted_feats[0]]:0.4e} {mda[feat]:0.4e} {np.sqrt(mda2[feat]-mda[feat]**2):0.4e} {mda[feat]/(np.sqrt(mda2[feat]-mda[feat]**2)+1e-14):0.4e}", file=f)
+		rows = []
+		for feat in sorted_feats:
+			row = {"Feature":feat,
+				   "MDA_norm":mda[feat]/mda[sorted_feats[0]],
+				   "MDA": mda[feat],
+				   "stdev": np.sqrt(mda2[feat]-mda[feat]**2),
+				   "z-score": mda[feat]/(np.sqrt(mda2[feat]-mda[feat]**2)+1e-14)}
+			rows.append(row)
+		pd.DataFrame(rows).to_csv(self.output()['csv'].path)
 
 	def output(self):
 		try:
@@ -1948,9 +1968,11 @@ class MDAFeatureImportances(luigi.Task):
 			pass
 
 		if self.ext_val == 'No':
-			return luigi.LocalTarget(os.path.join(tmp_path,self.__class__.__name__,f"MDAeli5_Log_{self.wf_name}_{self.clf_name}.txt"))
+			return {'txt': luigi.LocalTarget(os.path.join(tmp_path,self.__class__.__name__,f"MDAeli5_Log_{self.wf_name}_{self.clf_name}.txt")),
+					'csv': luigi.LocalTarget(os.path.join(tmp_path,self.__class__.__name__,f"MDAeli5_Log_{self.wf_name}_{self.clf_name}.csv"))}
 		elif self.ext_val == 'Yes':
-			return luigi.LocalTarget(os.path.join(tmp_path,self.__class__.__name__,f"MDAeli5_Log_{self.wf_name}_{self.clf_name}_EXT.txt"))
+			return {'txt': luigi.LocalTarget(os.path.join(tmp_path,self.__class__.__name__,f"MDAeli5_Log_{self.wf_name}_{self.clf_name}_EXT.txt")),
+					'csv': luigi.LocalTarget(os.path.join(tmp_path,self.__class__.__name__,f"MDAeli5_Log_{self.wf_name}_{self.clf_name}_EXT.csv"))}
 
 
 # class FeatureScorer(luigi.Task):
@@ -2097,17 +2119,17 @@ class InterpretationReport(luigi.Task):
 			if self.best_MDA == 'Yes':
 				prerequisite = MDAFeatureImportances(clf_name = best_ml, wf_name = self.wf_name, ext_val = self.ext_val)
 				luigi.build([prerequisite], local_scheduler = False)
-				shutil.copy(prerequisite.output().path, self.output()['best_mda'].path)
+				shutil.copy(prerequisite.output()['txt'].path, self.output()['best_mda'].path)
 			if self.best_shap == 'Yes':
 				prerequisite = ShapleyValues(clf_name = best_ml, wf_name = self.wf_name, ext_val = self.ext_val)
 				luigi.build([prerequisite], local_scheduler = False)
-				shutil.copy(prerequisite.output().path, self.output()['best_shap'].path)
+				shutil.copy(prerequisite.output()["png"].path, self.output()['best_shap'].path)
 		if self.all_MDA == 'Yes':
 			for i in self.list_ML:
-				shutil.copy(self.input()[i+'_mda'].path, self.output()[i+'_mda'].path)
+				shutil.copy(self.input()[i+'_mda']['txt'].path, self.output()[i+'_mda'].path)
 		if self.all_shap == 'Yes':
 			for i in self.list_ML:
-				shutil.copy(self.input()[i+'_shap'].path, self.output()[i+'_shap'].path)
+				shutil.copy(self.input()[i+'_shap']["png"].path, self.output()[i+'_shap'].path)
 
 	def output(self):
 		outputs = {}
