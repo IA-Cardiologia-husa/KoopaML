@@ -1740,7 +1740,7 @@ class ShapleyValues(luigi.Task):
 						ind = np.random.choice(ind, 500, replace = False)
 						df_train = df_train.loc[ind]
 
-					df_test = df_folded.loc[df_folded[f'Repetition_{rep}_folds']!=fold, feature_list]
+					df_test = df_folded.loc[df_folded[f'Repetition_{rep}_folds']==fold, feature_list]
 					#If the test dataset is too big (we have considered greater than 100), we select a random sample of it
 					ind = df_test.index
 					if len(ind) > 100:
@@ -1751,9 +1751,9 @@ class ShapleyValues(luigi.Task):
 					with open(self.input()[f'CalculateKFold_{rep}'][f"Model_{fold}"].path, "rb") as f:
 						model = pickle.load(f)
 
-					masker = shap.maskers.Independent(data =  df_train.loc[:,feature_list])
+					masker = shap.maskers.Independent(data =  df_train.loc[:,feature_list].astype(float).values)
 					explainer = shap.PermutationExplainer(lambda x: model.predict_proba(x)[:,1], masker, link = shap.links.logit)
-					shap_values = explainer(df_test).values
+					shap_values = explainer(df_test.astype(float).values).values
 
 					# try:
 					# 	if hasattr(model, '__getitem__'):
@@ -1838,9 +1838,9 @@ class ShapleyValues(luigi.Task):
 					"pickle_values": luigi.LocalTarget(os.path.join(tmp_path,self.__class__.__name__,self.wf_name,f"ShapleyValues_{self.wf_name}_{self.clf_name}.pickle")),
 					"pickle_dftest": luigi.LocalTarget(os.path.join(tmp_path,self.__class__.__name__,self.wf_name,f"dftest_{self.wf_name}_{self.clf_name}.pickle"))}
 		elif self.ext_val == 'Yes':
-			return {"png": luigi.LocalTarget(os.path.join(tmp_path,self.__class__.__name__,self.wf_name,f"ShapleyValues_{self.wf_name}_{self.clf_name}_EXT.png"),
+			return {"png": luigi.LocalTarget(os.path.join(tmp_path,self.__class__.__name__,self.wf_name,f"ShapleyValues_{self.wf_name}_{self.clf_name}_EXT.png")),
 					"pickle_values": luigi.LocalTarget(os.path.join(tmp_path,self.__class__.__name__,self.wf_name,f"ShapleyValues_{self.wf_name}_{self.clf_name}_EXT.pickle")),
-					"pickle_dftest": luigi.LocalTarget(os.path.join(tmp_path,self.__class__.__name__,self.wf_name,f"dftest_{self.wf_name}_{self.clf_name}.pickle")))
+					"pickle_dftest": luigi.LocalTarget(os.path.join(tmp_path,self.__class__.__name__,self.wf_name,f"dftest_{self.wf_name}_{self.clf_name}.pickle"))}
 
 
 class MDAFeatureImportances(luigi.Task):
@@ -1875,6 +1875,7 @@ class MDAFeatureImportances(luigi.Task):
 			mda[feat] = 0
 			mda2[feat] = 0
 
+		rows = []
 		if self.ext_val == 'No':
 			df_folded = pd.read_pickle(self.input()['CreateFolds']['pickle'].path)
 			for rep in range(WF_info[self.wf_name]["cv_repetitions"]):
@@ -1906,6 +1907,14 @@ class MDAFeatureImportances(luigi.Task):
 							aucroc_shuffled = sk_m.roc_auc_score(true_label.loc[true_label.notnull()].astype(bool),pred_prob[true_label.notnull()])
 							mda[feat] += aucroc_original - aucroc_shuffled
 							mda2[feat] += (aucroc_original - aucroc_shuffled)**2
+							row = {'feat':feat,
+								   'rep':rep,
+								   'fold':fold,
+								   'iter':i,
+								   'aucroc_original':aucroc_original,
+								   'aucroc_shuffled':aucroc_shuffled,
+								   'mda':aucroc_original-aucroc_shuffled}
+							rows.append(row)
 			for feat in feature_list:
 				mda[feat] = mda[feat]/(WF_info[self.wf_name]["cv_repetitions"]*WF_info[self.wf_name]["cv_folds"]*self.n_iterations)
 				mda2[feat] = mda2[feat]/(WF_info[self.wf_name]["cv_repetitions"]*WF_info[self.wf_name]["cv_folds"]*self.n_iterations)
@@ -1940,10 +1949,19 @@ class MDAFeatureImportances(luigi.Task):
 					aucroc_shuffled = sk_m.roc_auc_score(true_label[~np.isnan(true_label)].astype(bool),pred_prob[~np.isnan(true_label)])
 					mda[feat] += aucroc_original - aucroc_shuffled
 					mda2[feat] += (aucroc_original - aucroc_shuffled)**2
+					row = {'feat':feat,
+						   'rep':0,
+						   'fold':0,
+						   'iter':i,
+						   'aucroc_original':aucroc_original,
+						   'aucroc_shuffled':aucroc_shuffled,
+						   'mda':aucroc_original-aucroc_shuffled}
+					rows.append(row)
 			for feat in feature_list:
 				mda[feat] = mda[feat]/(self.n_iterations)
 				mda2[feat] = mda2[feat]/(self.n_iterations)
 
+		pd.DataFrame(rows).to_pickle(self.output()['iter'].path)
 		# sorted_feats = sorted(feature_list, key= lambda x: mda[feat]/(np.sqrt(mda2[feat]-mda[feat]**2)+1e-14))
 		sorted_feats = sorted(feature_list, key= lambda x: mda[x], reverse=True)
 
@@ -1969,10 +1987,12 @@ class MDAFeatureImportances(luigi.Task):
 
 		if self.ext_val == 'No':
 			return {'txt': luigi.LocalTarget(os.path.join(tmp_path,self.__class__.__name__,f"MDAeli5_Log_{self.wf_name}_{self.clf_name}.txt")),
-					'csv': luigi.LocalTarget(os.path.join(tmp_path,self.__class__.__name__,f"MDAeli5_Log_{self.wf_name}_{self.clf_name}.csv"))}
+					'csv': luigi.LocalTarget(os.path.join(tmp_path,self.__class__.__name__,f"MDAeli5_Log_{self.wf_name}_{self.clf_name}.csv")),
+					'iter': luigi.LocalTarget(os.path.join(tmp_path,self.__class__.__name__,f"df_iter_{self.wf_name}_{self.clf_name}.pickle"))}
 		elif self.ext_val == 'Yes':
 			return {'txt': luigi.LocalTarget(os.path.join(tmp_path,self.__class__.__name__,f"MDAeli5_Log_{self.wf_name}_{self.clf_name}_EXT.txt")),
-					'csv': luigi.LocalTarget(os.path.join(tmp_path,self.__class__.__name__,f"MDAeli5_Log_{self.wf_name}_{self.clf_name}_EXT.csv"))}
+					'csv': luigi.LocalTarget(os.path.join(tmp_path,self.__class__.__name__,f"MDAeli5_Log_{self.wf_name}_{self.clf_name}_EXT.csv")),
+					'iter': luigi.LocalTarget(os.path.join(tmp_path,self.__class__.__name__,f"df_iter_{self.wf_name}_{self.clf_name}_EXT.pickle"))}
 
 
 # class FeatureScorer(luigi.Task):
