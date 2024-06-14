@@ -19,7 +19,9 @@
 # Example:
 #
 # WF_info['TallHeart'] = {'formal_title': 'Prediction of Heart Attack in tall patients',
+#						  'type': 'classification',
 #						  'label_name': 'Heart Attack',
+#						  'label_time': None,
 #						  'feature_list': ['Age','Height','Weight','Arterial Tension'],
 #						  'filter_function': lambda df: df.loc[df['Height']>200].reset_index(drop=True),
 #						  'group_label': None,

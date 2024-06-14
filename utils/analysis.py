@@ -10,7 +10,6 @@ import os
 
 from user_variables_info import dict_var
 from user_MLmodels_info import ML_info
-from user_RiskScores_info import RS_info
 
 def create_descriptive_xls(data, wf_name, label):
 
@@ -392,18 +391,13 @@ def plot_all_rocs(task_requires, fig_path,title):
 		else:
 			score_name = "ERROR: Unknown score or classifier"
 
-		# true_label = df.loc[df['True Label'].notnull(), 'True Label'].astype(bool).values
-		# pred_prob = df.loc[df['True Label'].notnull(), 'Predicted Probability'].values
-		#
-		# fpr, tpr, thresholds = sk_m.roc_curve(true_label,pred_prob)
-
 		roc_divisions = 1001
 		fpr_va = np.linspace(0,1,roc_divisions)
 		tpr_va = np.zeros(roc_divisions)
 		for rep in df['Repetition'].unique():
 			for fold in df['Fold'].unique():
 				true_label = df.loc[df['True Label'].notnull()&(df['Repetition']==rep)&(df['Fold']==fold), 'True Label'].astype(bool).values
-				pred_prob = df.loc[df['True Label'].notnull()&(df['Repetition']==rep)&(df['Fold']==fold), 'Predicted Probability'].values
+				pred_prob = df.loc[df['True Label'].notnull()&(df['Repetition']==rep)&(df['Fold']==fold), 'Prediction'].values
 				fpr, tpr, thresholds = sk_m.roc_curve(true_label,pred_prob)
 				tpr_va += np.interp(fpr_va, fpr, tpr)
 		tpr_va = tpr_va / (len(df['Repetition'].unique())*len(df['Fold'].unique()))
@@ -443,7 +437,7 @@ def plot_all_prs(task_requires, fig_path,title):
 			score_name = "ERROR: Unknown score or classifier"
 
 		true_label = df.loc[df['True Label'].notnull(), 'True Label'].astype(bool).values
-		pred_prob = df.loc[df['True Label'].notnull(), 'Predicted Probability'].values
+		pred_prob = df.loc[df['True Label'].notnull(), 'Prediction'].values
 
 		pred_prob = pred_prob[~np.isnan(true_label)]
 		true_label = true_label[~np.isnan(true_label)]

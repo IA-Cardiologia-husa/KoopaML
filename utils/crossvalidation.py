@@ -8,31 +8,6 @@ import time
 
 # from .stratifiedgroupkfold import StratifiedGroupKFold
 
-def external_validation_RS(external_data, label, feature_oddratio):
-
-	X = external_data
-	Y = external_data.loc[:,[label]]
-
-	Y_prob = pd.Series(0, index=X.index)
-	for feat in feature_oddratio.keys():
-		Y_prob += feature_oddratio[feat]*X.loc[:,feat]
-
-	#Saved as a list of lists because of compatibility with predict_kfold
-	tl_pp_dict={"true_label":[list(Y.values.flat)], "pred_prob":[list(Y_prob.values.flat)]}
-
-	return tl_pp_dict
-
-def external_validation(external_data, label, features, clf):
-	X = external_data.loc[:,features]
-	Y = external_data.loc[:,[label]]
-
-
-	Y_prob = clf.predict_proba(X)[:,1]
-
-	#Saved as a list of lists because of compatibility with predict_kfold
-	tl_pp_dict={"true_label":[list(Y.values.flat)], "pred_prob":[list(Y_prob)]}
-
-	return tl_pp_dict
 
 def predict_filter_kfold_ML(data, label, features, filter_function, clf, calibration, seed, cvfolds):
 

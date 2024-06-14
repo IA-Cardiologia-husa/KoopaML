@@ -10,7 +10,7 @@
 # RF for Random Forest with KNN imputer
 # LR_SCL_HypTuning for Logistic Regression with Hyperparameter tuning
 
-
+import sklearn.base as sk_ba
 import sklearn.ensemble as sk_en
 import sklearn.linear_model as sk_lm
 import sklearn.pipeline as sk_pl
