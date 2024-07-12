@@ -26,6 +26,10 @@ class aucroc():
 		roc_divisions = 1001
 		fpr_va = np.linspace(0,1,roc_divisions)
 		tpr_va = np.zeros(roc_divisions)
+		if 'Repetition' not in df.columns:
+			df['Repetition']=1
+		if 'Fold' not in df.columns:
+			df['Fold']=1
 		for rep in df['Repetition'].unique():
 			for fold in df['Fold'].unique():
 				true_label = df.loc[df['True Label'].notnull()&(df['Repetition']==rep)&(df['Fold']==fold), 'True Label'].astype(bool).values
@@ -77,6 +81,10 @@ class aucpr():
 		pr_divisions = 1001
 		prec_va = np.linspace(0,1,pr_divisions)
 		recall_va = np.zeros(pr_divisions)
+		if 'Repetition' not in df.columns:
+			df['Repetition']=1
+		if 'Fold' not in df.columns:
+			df['Fold']=1
 		for rep in df['Repetition'].unique():
 			for fold in df['Fold'].unique():
 				true_label = df.loc[df['True Label'].notnull()&(df['Repetition']==rep)&(df['Fold']==fold), 'True Label'].astype(bool).values
@@ -103,7 +111,7 @@ class aucpr():
 		return fig, ax
 
 	def save_figure(self, fig, ax, name):
-		ax.legend(loc="lower right", fontsize = 10)
+		ax.legend(loc="upper right", fontsize = 10)
 		fig.savefig(name)
 		return
 

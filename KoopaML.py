@@ -598,10 +598,11 @@ class Evaluate_ML(luigi.Task):
 			score = np.array(score)
 			results_dict[f'avg_{m.name}'] = score.mean()
 			if(n_folds>1):
-				results_dict[f'avg_{m.name}_stderr'] = score.std(ddof = 1)*np.sqrt(1/n_repfolds+1/(n_folds-1))
+				stderr = score.std(ddof = 1)*np.sqrt(1/n_repfolds+1/(n_folds-1))
+				results_dict[f'avg_{m.name}_stderr'] = stderr
 				c = sc_st.t.ppf(1-critical_pvalue/2, df= n_repfolds-1)
-				results_dict[f'{m.name}_95ci_low'] = score.mean() - c*score.std()
-				results_dict[f'{m.name}_95ci_high'] = score.mean() + c*score.std()
+				results_dict[f'{m.name}_95ci_low'] = score.mean() - c*stderr
+				results_dict[f'{m.name}_95ci_high'] = score.mean() + c*stderr
 				# Esto del bootstrap no tiene mucho sentido y parece que da resultados peores según añades folds
 				# bootstrap_scores = [np.random.choice(score[rep*n_folds:(rep+1)*n_folds], n_folds, replace = True).mean() for rep in range(n_reps) for b in range(200)]
 				# results_dict[f'{m.name}_95ci_low'] = np.quantile(bootstrap_scores, critical_pvalue/2)
@@ -1085,47 +1086,47 @@ class BestMLModelReport(luigi.Task):
 					"xlsx": luigi.LocalTarget(os.path.join(report_path+f'-{self.datestring}',self.wf_name,f"Model_Summary_{self.wf_name}_EXT.xlsx"))}
 
 
-class AllThresholds(luigi.Task):
-	clf_or_score=luigi.Parameter()
-	wf_name = luigi.Parameter()
-	list_ML = luigi.ListParameter(default=list(ML_info.keys()))
-	ext_val = luigi.Parameter(default='No')
-
-	def requires(self):
-		return Evaluate_ML(wf_name=self.wf_name, clf_name=self.clf_or_score, ext_val = self.ext_val)
-
-
-	def run(self):
-		setupLog(self.__class__.__name__)
-		with open(self.input()["pred_prob"].path, 'rb') as f:
-			pred_prob=pickle.load(f)
-		with open(self.input()["true_label"].path, 'rb') as f:
-			true_label=pickle.load(f)
-
-		list_thresholds = all_thresholds(pred_prob, true_label)
-
-		with open(self.output()['txt'].path,'w') as f:
-			rows = []
-			for i in list_thresholds:
-				(threshold, tprate, fprate, tnrate, fnrate, sens, spec, prec, nprv) = i
-				f.write(f'Threshold: {threshold}\n')
-				f.write(f'TP:{tprate*100:.1f} FP:{fprate*100:.1f} TN:{tnrate*100:.1f} FN:{fnrate*100:.1f}\n')
-				f.write(f'Sensitivity:{sens*100:.1f} Specificity:{spec*100:.1f} Precision:{prec*100:.1f} NPRv:{nprv*100:.1f}\n')
-				rows.append([threshold, tprate, fprate, tnrate, fnrate, sens, spec, prec, nprv])
-		df_thr = pd.DataFrame(rows, columns=['Threshold','TP','FP','TN','FN', 'sensitivity','specificity','precision','nprv'])
-		with open(self.output()['df'].path,'w') as f:
-			df_thr.to_csv(f)
-	def output(self):
-		try:
-			os.makedirs(os.path.join(tmp_path,self.__class__.__name__))
-		except:
-			pass
-		if self.ext_val == 'No':
-			return {'txt': luigi.LocalTarget(os.path.join(tmp_path,self.__class__.__name__, f"Thresholds_{self.wf_name}_{self.clf_or_score}.txt")),
-					'df': luigi.LocalTarget(os.path.join(tmp_path,self.__class__.__name__, f"Thresholds_{self.wf_name}_{self.clf_or_score}.csv"))}
-		elif self.ext_val == 'Yes':
-			return {'txt': luigi.LocalTarget(os.path.join(tmp_path,self.__class__.__name__, f"Thresholds_{self.wf_name}_{self.clf_or_score}_EXT.txt")),
-					'df': luigi.LocalTarget(os.path.join(tmp_path,self.__class__.__name__, f"Thresholds_{self.wf_name}_{self.clf_or_score}_EXT.csv"))}
+# class AllThresholds(luigi.Task):
+# 	clf_or_score=luigi.Parameter()
+# 	wf_name = luigi.Parameter()
+# 	list_ML = luigi.ListParameter(default=list(ML_info.keys()))
+# 	ext_val = luigi.Parameter(default='No')
+#
+# 	def requires(self):
+# 		return Evaluate_ML(wf_name=self.wf_name, clf_name=self.clf_or_score, ext_val = self.ext_val)
+#
+#
+# 	def run(self):
+# 		setupLog(self.__class__.__name__)
+# 		with open(self.input()["pred_prob"].path, 'rb') as f:
+# 			pred_prob=pickle.load(f)
+# 		with open(self.input()["true_label"].path, 'rb') as f:
+# 			true_label=pickle.load(f)
+#
+# 		list_thresholds = all_thresholds(pred_prob, true_label)
+#
+# 		with open(self.output()['txt'].path,'w') as f:
+# 			rows = []
+# 			for i in list_thresholds:
+# 				(threshold, tprate, fprate, tnrate, fnrate, sens, spec, prec, nprv) = i
+# 				f.write(f'Threshold: {threshold}\n')
+# 				f.write(f'TP:{tprate*100:.1f} FP:{fprate*100:.1f} TN:{tnrate*100:.1f} FN:{fnrate*100:.1f}\n')
+# 				f.write(f'Sensitivity:{sens*100:.1f} Specificity:{spec*100:.1f} Precision:{prec*100:.1f} NPRv:{nprv*100:.1f}\n')
+# 				rows.append([threshold, tprate, fprate, tnrate, fnrate, sens, spec, prec, nprv])
+# 		df_thr = pd.DataFrame(rows, columns=['Threshold','TP','FP','TN','FN', 'sensitivity','specificity','precision','nprv'])
+# 		with open(self.output()['df'].path,'w') as f:
+# 			df_thr.to_csv(f)
+# 	def output(self):
+# 		try:
+# 			os.makedirs(os.path.join(tmp_path,self.__class__.__name__))
+# 		except:
+# 			pass
+# 		if self.ext_val == 'No':
+# 			return {'txt': luigi.LocalTarget(os.path.join(tmp_path,self.__class__.__name__, f"Thresholds_{self.wf_name}_{self.clf_or_score}.txt")),
+# 					'df': luigi.LocalTarget(os.path.join(tmp_path,self.__class__.__name__, f"Thresholds_{self.wf_name}_{self.clf_or_score}.csv"))}
+# 		elif self.ext_val == 'Yes':
+# 			return {'txt': luigi.LocalTarget(os.path.join(tmp_path,self.__class__.__name__, f"Thresholds_{self.wf_name}_{self.clf_or_score}_EXT.txt")),
+# 					'df': luigi.LocalTarget(os.path.join(tmp_path,self.__class__.__name__, f"Thresholds_{self.wf_name}_{self.clf_or_score}_EXT.csv"))}
 
 class ShapleyValues(luigi.Task):
 	clf_name = luigi.Parameter()
@@ -1454,15 +1455,15 @@ class MDAFeatureImportances(luigi.Task):
 
 	def output(self):
 		try:
-			os.makedirs(os.path.join(tmp_path,self.__class__.__name__))
+			os.makedirs(os.path.join(tmp_path,self.__class__.__name__,self.wf_name))
 		except:
 			pass
 
 		outputs = {}
 		outputs['iter'] = luigi.LocalTarget(os.path.join(tmp_path,self.__class__.__name__,f"df_iter_{self.wf_name}_{self.clf_name}{'_EXT' if self.ext_val == 'Yes' else ''}.pickle"))
 		for metric in self.metrics:
-			outputs[f'{metric}_csv'] = luigi.LocalTarget(os.path.join(tmp_path,self.__class__.__name__,f"MDA_{metric}_Log_{self.wf_name}_{self.clf_name}{'_EXT' if self.ext_val == 'Yes' else ''}.csv"))
-			outputs[f'{metric}_txt'] = luigi.LocalTarget(os.path.join(tmp_path,self.__class__.__name__,f"MDA_{metric}_Log_{self.wf_name}_{self.clf_name}{'_EXT' if self.ext_val == 'Yes' else ''}.txt"))
+			outputs[f'{metric}_csv'] = luigi.LocalTarget(os.path.join(tmp_path,self.__class__.__name__,self.wf_name,f"MDA_{metric}_Log_{self.wf_name}_{self.clf_name}{'_EXT' if self.ext_val == 'Yes' else ''}.csv"))
+			outputs[f'{metric}_txt'] = luigi.LocalTarget(os.path.join(tmp_path,self.__class__.__name__,self.wf_name,f"MDA_{metric}_Log_{self.wf_name}_{self.clf_name}{'_EXT' if self.ext_val == 'Yes' else ''}.txt"))
 		return outputs
 
 # class FeatureScorer(luigi.Task):
@@ -1669,7 +1670,7 @@ class FinalModelTrainResults(luigi.Task):
 				"shap": luigi.LocalTarget(os.path.join(tmp_path,self.__class__.__name__,self.wf_name,f"FinalModelTrainShapValues_{self.clf_name}.png"))}
 
 class TrainingReport(luigi.Task):
-	list_ML = luigi.ListParameter(default=list(ML_info.keys()))
+	list_ML = luigi.ListParameter()
 	wf_name = luigi.Parameter()
 	datestring = luigi.Parameter(default=dt.datetime.now().strftime("%y%m%d-%H%M%S"))
 
@@ -1709,14 +1710,12 @@ class TrainingReport(luigi.Task):
 		return outputs
 
 class AllTrainingReports(luigi.Task):
-	list_ML = luigi.ListParameter(default=list(ML_info.keys()))
 	list_WF = luigi.ListParameter(default=list(WF_info.keys()))
 	datestring = luigi.Parameter(default=dt.datetime.now().strftime("%y%m%d-%H%M%S"))
 
 	def requires(self):
 		for it_wf_name in self.list_WF:
-			yield TrainingReport(wf_name = it_wf_name, list_ML=self.list_ML, datestring=self.datestring)
-
+			yield TrainingReport(wf_name = it_wf_name, list_ML=WF_info[it_wf_name]['models'], datestring=self.datestring)
 
 	def run(self):
 		setupLog(self.__class__.__name__)
@@ -1727,7 +1726,7 @@ class AllTrainingReports(luigi.Task):
 		return luigi.LocalTarget(os.path.join(log_path, f"AllTrainingReports_Log-{self.datestring}.txt"))
 
 class InterpretationReport(luigi.Task):
-	list_ML = luigi.ListParameter(default=list(ML_info.keys()))
+	list_ML = luigi.ListParameter()
 	wf_name = luigi.Parameter()
 	datestring = luigi.Parameter(default=dt.datetime.now().strftime("%y%m%d-%H%M%S"))
 	ext_val = luigi.Parameter(default = 'No')
@@ -1794,7 +1793,6 @@ class InterpretationReport(luigi.Task):
 
 
 class AllInterpretationReports(luigi.Task):
-	list_ML = luigi.ListParameter(default=list(ML_info.keys()))
 	list_WF = luigi.ListParameter(default=list(WF_info.keys()))
 	datestring = luigi.Parameter(default=dt.datetime.now().strftime("%y%m%d-%H%M%S"))
 
@@ -1805,10 +1803,10 @@ class AllInterpretationReports(luigi.Task):
 
 	def requires(self):
 		for it_wf_name in self.list_WF:
-			yield InterpretationReport(wf_name = it_wf_name, list_ML=self.list_ML, datestring=self.datestring,
+			yield InterpretationReport(wf_name = it_wf_name, list_ML=WF_info[it_wf_name]['models'], datestring=self.datestring,
 										best_MDA = self.best_MDA, best_shap = self.best_shap, all_MDA = self.all_MDA, all_shap = self.all_shap)
 			if(WF_info[it_wf_name]['external_validation'] == 'Yes'):
-				yield InterpretationReport(wf_name = it_wf_name, list_ML=self.list_ML, ext_val = 'Yes', datestring=self.datestring,
+				yield InterpretationReport(wf_name = it_wf_name, list_ML=WF_info[it_wf_name]['models'], ext_val = 'Yes', datestring=self.datestring,
 											best_MDA = self.best_MDA, best_shap = self.best_shap, all_MDA = self.all_MDA, all_shap = self.all_shap)
 
 	def run(self):
@@ -1821,17 +1819,14 @@ class AllInterpretationReports(luigi.Task):
 
 class AllPerformanceReports(luigi.Task):
 
-	list_ML = luigi.ListParameter(default=list(ML_info.keys()))
 	list_WF = luigi.ListParameter(default=list(WF_info.keys()))
 	datestring = luigi.Parameter(default=dt.datetime.now().strftime("%y%m%d-%H%M%S"))
 
 	def requires(self):
 		for it_wf_name in self.list_WF:
-			if(len(self.list_ML) > 0):
-				yield BestMLModelReport(wf_name = it_wf_name, list_ML=self.list_ML, datestring=self.datestring)
+			yield BestMLModelReport(wf_name = it_wf_name, list_ML=WF_info[it_wf_name]['models'], datestring=self.datestring)
 			if(WF_info[it_wf_name]['external_validation'] == 'Yes'):
-				if(len(self.list_ML) > 0):
-					yield BestMLModelReport(wf_name = it_wf_name, list_ML=self.list_ML, datestring=self.datestring, ext_val = 'Yes')
+				yield BestMLModelReport(wf_name = it_wf_name, list_ML=WF_info[it_wf_name]['models'], datestring=self.datestring, ext_val = 'Yes')
 
 
 	def run(self):
@@ -1844,13 +1839,12 @@ class AllPerformanceReports(luigi.Task):
 
 class AllModels(luigi.Task):
 
-	list_ML = luigi.ListParameter(default=list(ML_info.keys()))
 	list_WF = luigi.ListParameter(default=list(WF_info.keys()))
 	datestring = luigi.Parameter(default=dt.datetime.now().strftime("%y%m%d-%H%M%S"))
 
 	def requires(self):
 		for it_wf_name in self.list_WF:
-			for it_clf_name in self.list_ML:
+			for it_clf_name in WF_info[it_wf_name]['models']:
 				yield FinalModelAndHyperparameterResults(wf_name = it_wf_name, clf_name = it_clf_name)
 
 	def run(self):
@@ -1912,16 +1906,15 @@ class AllDescriptiveReports(luigi.Task):
 				yield luigi.LocalTarget(os.path.join(report_path+f'-{self.datestring}', it_wf_name, f"{it_wf_name}_descriptivo_EXT.xlsx"))
 
 class AllGraphs(luigi.Task):
-	list_ML = luigi.ListParameter(default=list(ML_info.keys()))
 	list_WF = luigi.ListParameter(default=list(WF_info.keys()))
 	datestring = luigi.Parameter(default=dt.datetime.now().strftime("%y%m%d-%H%M%S"))
 
 	def requires(self):
 		for it_wf_name in self.list_WF:
 			for metric in WF_info[it_wf_name]['metrics']:
-				yield GraphsWF(wf_name = it_wf_name, list_ML=self.list_ML,  datestring=self.datestring, metric=metric)
+				yield GraphsWF(wf_name = it_wf_name, list_ML=WF_info[it_wf_name]['models'],  datestring=self.datestring, metric=metric)
 				if(WF_info[it_wf_name]['external_validation'] == 'Yes'):
-					yield GraphsWF(wf_name = it_wf_name, list_ML=self.list_ML, ext_val = 'Yes', datestring=self.datestring, metric = metric)
+					yield GraphsWF(wf_name = it_wf_name, list_ML=WF_info[it_wf_name]['models'], ext_val = 'Yes', datestring=self.datestring, metric = metric)
 
 	def run(self):
 		setupLog(self.__class__.__name__)
@@ -1933,7 +1926,6 @@ class AllGraphs(luigi.Task):
 
 class AllTasks(luigi.Task):
 
-	list_ML = luigi.ListParameter(default=list(ML_info.keys()))
 	list_WF = luigi.ListParameter(default=list(WF_info.keys()))
 	datestring = luigi.Parameter(default=dt.datetime.now().strftime("%y%m%d-%H%M%S"))
 	best_MDA = luigi.Parameter(default = 'Yes')
@@ -1947,13 +1939,13 @@ class AllTasks(luigi.Task):
 
 	def requires(self):
 
-		return [AllGraphs(list_ML = self.list_ML, list_WF = self.list_WF, datestring=self.datestring),
+		return [AllGraphs(list_WF = self.list_WF, datestring=self.datestring),
 				AllDescriptiveReports(list_WF = self.list_WF, datestring=self.datestring),
 				AllHistograms(list_WF = self.list_WF, datestring=self.datestring),
-				AllModels(list_ML = self.list_ML, list_WF = self.list_WF, datestring=self.datestring),
-				AllPerformanceReports(list_ML = self.list_ML, list_WF = self.list_WF, datestring=self.datestring),
-				AllTrainingReports(list_ML = self.list_ML, list_WF = self.list_WF, datestring=self.datestring),
-				AllInterpretationReports(list_ML = self.list_ML, list_WF = self.list_WF, datestring=self.datestring,
+				AllModels(list_WF = self.list_WF, datestring=self.datestring),
+				AllPerformanceReports(list_WF = self.list_WF, datestring=self.datestring),
+				AllTrainingReports(list_WF = self.list_WF, datestring=self.datestring),
+				AllInterpretationReports(list_WF = self.list_WF, datestring=self.datestring,
 										best_MDA = self.best_MDA, best_shap = self.best_shap, all_MDA = self.all_MDA, all_shap = self.all_shap),
 										]
 

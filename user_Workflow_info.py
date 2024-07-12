@@ -18,18 +18,20 @@
 #
 # Example:
 #
-# WF_info['TallHeart'] = {'formal_title': 'Prediction of Heart Attack in tall patients',
-#						  'type': 'classification',
-#						  'label_name': 'Heart Attack',
-#						  'label_time': None,
-#						  'feature_list': ['Age','Height','Weight','Arterial Tension'],
-#						  'filter_function': lambda df: df.loc[df['Height']>200].reset_index(drop=True),
-#						  'group_label': None,
-#						  'validation_type':'stratifiedkfold',
-#						  'cv_folds': 10,
-#						  'cv_repetitions': 10,
-#						  'external_validation': 'No',
-#						  'filter_external_validation': lambda df: df}
-
 
 WF_info ={}
+
+# WF_info['ClassificationExample'] = {'formal_title': 'Prediction of Heart Attack in tall patients',
+# 								  'type': 'classification',
+# 								  'label_name': 'Heart Attack',
+# 								  'label_time': None,
+# 								  'feature_list': ['Age','Height','Weight','Arterial Tension'],
+# 								  'filter_function': lambda df: df.loc[df['Height']>200].reset_index(drop=True),
+# 								  'models':['XGB', 'RF', 'LR', 'LR_SCL_HypTuning'],
+# 								  'group_label': None,
+# 								  'validation_type':'stratifiedkfold',
+# 								  'cv_folds': 10,
+# 								  'cv_repetitions': 10,
+# 								  'external_validation': 'No',
+# 								  'filter_external_validation': lambda df: df,
+# 								  'metrics':['aucroc','aucpr']}
