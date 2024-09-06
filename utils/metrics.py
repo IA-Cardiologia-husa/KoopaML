@@ -164,29 +164,65 @@ class rmse():
 
 
 class r2():
+# 	def __init__(self):
+# 		self.name = 'r2'
+# 		self.optimization_sign = 1
+# 		self.variance = None
+#
+# 	def __call__(self, df, df_train=None):
+# 		diff = df.loc[df['True Label'].notnull(), 'True Label'] - df.loc[df['True Label'].notnull(), 'Prediction']
+# 		r2 = 1-(diff**2).mean()/df.loc[df['True Label'].notnull(), 'True Label'].var()
+#
+# 		self.variance = 0
+# 		self.std_error = np.sqrt(self.variance)
+# 		return r2
+#
+# 	def plot(self, df, results, ax, score_name):
+#
+# 		ax.barh(f'{score_name}', results["avg_r2"], color=self.cmap(self.color_index),
+# 			   label = f'{score_name}: R2 ={results["avg_r2"]:1.2f} ({results["r2_95ci_low"]:1.2f}-{results["r2_95ci_high"]:1.2f})')
+# 		self.color_index+=1
+#
+# 	def figure(self, n, cmap = "tab10"):
+# 		fig, ax = plt.subplots(figsize=(10,10))
+#
+#
+# 		self.color_index = 0
+# 		self.cmap=plt.get_cmap(cmap)
+#
+# 		return fig, ax
+#
+# 	def save_figure(self, fig, ax, name):
+# 		ax.legend(loc="lower right", fontsize = 10)
+# 		ax.set_xlim([-0.05, 1.05])
+#
+# 		fig.savefig(name)
+# 		return
 	def __init__(self):
-		self.name = 'r2'
-		self.optimization_sign = 1
+		self.name = 'mse_r2'
+		self.optimization_sign = -1
 		self.variance = None
 
 	def __call__(self, df, df_train=None):
 		diff = df.loc[df['True Label'].notnull(), 'True Label'] - df.loc[df['True Label'].notnull(), 'Prediction']
-		r2 = 1-(diff**2).mean()/df.loc[df['True Label'].notnull(), 'True Label'].var()
 
 		self.variance = 0
 		self.std_error = np.sqrt(self.variance)
-		return r2
+		return (diff**2).mean()
 
 	def plot(self, df, results, ax, score_name):
+		var_tl = df['True Label'].var()
 
-		ax.barh(f'{score_name}', results["avg_r2"], color=self.cmap(self.color_index),
-			   label = f'{score_name}: R2 ={results["avg_r2"]:1.2f} ({results["r2_95ci_low"]:1.2f}-{results["r2_95ci_high"]:1.2f})')
+		avg_r2 = 1- results["avg_mse_r2"]/var_tl
+		r2_95ci_low = 1- results["mse_r2_95ci_low"]/var_tl
+		r2_95ci_high = 1- results["mse_r2_95ci_high"]/var_tl
+
+		ax.barh(f'{score_name}', avg_r2, color=self.cmap(self.color_index),
+			   label = f'{score_name}: R2 ={avg_r2:.3g} ({r2_95ci_low:.3g}-{r2_95ci_high:.3g})')
 		self.color_index+=1
 
 	def figure(self, n, cmap = "tab10"):
 		fig, ax = plt.subplots(figsize=(10,10))
-
-
 		self.color_index = 0
 		self.cmap=plt.get_cmap(cmap)
 
@@ -198,6 +234,7 @@ class r2():
 
 		fig.savefig(name)
 		return
+
 
 class cindex_censored():
 	def __init__(self):

@@ -487,6 +487,7 @@ class CalculateKFold(luigi.Task):
 			elif WF_info[self.wf_name]['type'] == 'regression':
 				clf.fit(X_train, Y_train)
 			elif WF_info[self.wf_name]['type'] == 'survival':
+				Y_train = Y_train.astype(bool)
 				R_train = pd.DataFrame({'label':Y_train, 'time':T_train}).to_records(index=False)
 				clf.fit(X_train, R_train)
 
@@ -543,6 +544,173 @@ class CalculateKFold(luigi.Task):
 			dic[f"Test_{i}_excel"] = luigi.LocalTarget(os.path.join(tmp_path,self.__class__.__name__,self.wf_name,self.clf_name,f"RepetitionNo{self.seed:03d}",f"Test_Results_{i:02d}.xlsx"))
 			dic[f"Model_{i}"] = luigi.LocalTarget(os.path.join(tmp_path,self.__class__.__name__,self.wf_name,self.clf_name,f"RepetitionNo{self.seed:03d}",f"{self.clf_name}_r{self.seed}_f{i}.pickle"))
 		return dic
+
+class InterpretationShapFairness(luigi.Task):
+	wf_name = luigi.Parameter()
+	clf_name = luigi.Parameter()
+	ext_val = luigi.Parameter(default='No')
+
+	def requires(self):
+		requirements = {}
+		requirements['shap'] = FinalModelTrainResults(wf_name = self.wf_name, clf_name = self.clf_name)
+		if(self.ext_val == 'Yes'):
+			requirements['data'] = ProcessExternalDatabase(wf_name = self.wf_name)
+		else:
+			requirements['data'] = ProcessDatabase(wf_name = self.wf_name)
+		return requirements
+
+	def run(self):
+		setupLog(self.__class__.__name__)
+
+		df = pd.read_pickle(self.input()["data"]["pickle"].path)
+		filter_function = WF_info[self.wf_name]["filter_function"]
+		features = WF_info[self.wf_name]["feature_list"]
+		# label = WF_info[self.wf_name]["label_name"]
+		# group_label = WF_info[self.wf_name]["group_label"]
+		fairness_label = WF_info[self.wf_name]["fairness_label"]
+		# if WF_info[self.wf_name]['type'] == 'survival':
+		# 	time = WF_info[self.wf_name]["label_time"]
+
+		df = filter_function(df).reset_index(drop=True)
+		X = df.loc[:,features]
+
+		with open(self.input()["shap"]["shapvalues"].path, 'rb') as f:
+			shap_values = pickle.load(f)
+
+		cats = X[fairness_label].unique()
+		plt.figure(figsize=(5*len(cats),5))
+		for i in range(len(cats)):
+			c = cats[i]
+			X_cat = X.loc[X[fairness_label]==c]
+			shap_cat = shap_values[X[fairness_label]==c]
+			shap_cat = shap_cat - shap_cat.mean(axis = 0)[np.newaxis,...]
+			ax = plt.subplot(1,len(cats), i+1)
+			shap.summary_plot(shap_cat, X_cat, max_display = 20, show=False)
+			ax.set_title(f"{fairness_label} = {c}")
+		plt.savefig(self.output().path, bbox_inches='tight', dpi=300)
+		plt.close()
+
+	def output(self):
+		try:
+			os.makedirs(os.path.join(tmp_path, self.__class__.__name__,self.wf_name))
+		except:
+			pass
+		return luigi.LocalTarget(os.path.join(tmp_path,self.__class__.__name__,self.wf_name,f"{'EXT_' if self.ext_val == 'Yes' else ''}Evaluation_Fairness_{self.clf_name}.png"))
+
+class DescriptiveFairness(luigi.Task):
+	wf_name = luigi.Parameter()
+	ext_val = luigi.Parameter(default='No')
+
+	def requires(self):
+		if(self.ext_val == 'Yes'):
+			return ProcessExternalDatabase(wf_name = self.wf_name)
+		else:
+			return ProcessDatabase(wf_name = self.wf_name)
+
+	def run(self):
+		setupLog(self.__class__.__name__)
+		df_input = pd.read_pickle(self.input()["pickle"].path)
+		if self.ext_val == 'No':
+			df_filtered = WF_info[self.wf_name]["filter_function"](df_input)
+		else:
+			df_filtered = WF_info[self.wf_name]["filter_external_validation"](df_input)
+		label = WF_info[self.wf_name]["fairness_label"]
+
+		df_output=create_descriptive_comparation(df_filtered, self.wf_name, label)
+
+		writer = pd.ExcelWriter(self.output().path, engine='xlsxwriter')
+		df_output.to_excel(writer, sheet_name='Sheet1')
+		writer.close()
+
+	def output(self):
+		try:
+			os.makedirs(os.path.join(tmp_path, self.__class__.__name__))
+		except:
+			pass
+
+		if(self.ext_val == 'No'):
+			return luigi.LocalTarget(os.path.join(tmp_path, self.__class__.__name__, f"{self.wf_name}_descriptivo_fairness_label.xlsx"))
+		elif(self.ext_val == 'Yes'):
+			return luigi.LocalTarget(os.path.join(tmp_path, self.__class__.__name__, f"{self.wf_name}_descriptivo_fairness_label_EXT.xlsx"))
+
+class Evaluate_Fairness(luigi.Task):
+	clf_name = luigi.Parameter()
+	wf_name = luigi.Parameter()
+	ext_val = luigi.Parameter(default='No')
+
+	def requires(self):
+		return {"Evaluate_ML": Evaluate_ML(clf_name = self.clf_name, wf_name = self.wf_name, ext_val = self.ext_val),
+				"CreateFolds": CreateFolds(wf_name = self.wf_name)}
+
+	def run(self):
+		setupLog(self.__class__.__name__)
+		fairness_label =  WF_info[self.wf_name]['fairness_label']
+
+		df = pd.read_pickle(self.input()[f"Evaluate_ML"]["pickle"].path)
+		df_folds = pd.read_pickle(self.input()[f"CreateFolds"]["pickle"].path)
+		df = df.merge(df_folds, on='CustomIndex')
+
+		n_reps = df['Repetition'].max()+1
+		n_folds = df['Fold'].max()+1
+		n_repfolds = n_reps*n_folds
+		critical_pvalue=0.05
+		results_dict = {}
+
+		dict_df = {}
+		for category in df[fairness_label].unique():
+			dict_df[category] = {}
+			for metric in WF_info[self.wf_name]['metrics']:
+				m = metrics_list[metric]()
+				score = []
+				for rep in range(n_reps):
+					for fold in range(n_folds):
+						df_aux = df.loc[(df['Repetition']==rep)&(df['Fold']==fold)&(df[fairness_label]==category)]
+						df_aux2 = df.loc[(df['Repetition']==rep)&(df['Fold']!=fold)&(df[fairness_label]==category)]
+						if len(df_aux) == 0:
+							score.append(np.nan)
+						else:
+							try:
+								score.append(m(df_aux, df_aux2))
+							except:
+								score.append(np.nan)
+				score = np.array(score)
+
+				dict_df[category][f'avg_{m.name}'] = score.mean(where=~np.isnan(score))
+				if(n_folds>1):
+					stderr = score.std(ddof = 1)*np.sqrt(1/n_repfolds+1/(n_folds-1))
+					dict_df[category][f'avg_{m.name}_stderr'] = stderr
+					c = sc_st.t.ppf(1-critical_pvalue/2, df= n_repfolds-1)
+					dict_df[category][f'{m.name}_95ci_low'] = score.mean() - c*stderr
+					dict_df[category][f'{m.name}_95ci_high'] = score.mean() + c*stderr
+					dict_df[category][f'pool_{m.name}'] = m(df.loc[df[fairness_label]==category], df.loc[df[fairness_label]==category])
+				else:
+					if m.variance is not None:
+						c = sc_st.t.ppf(1-critical_pvalue/2, df= n_repfolds-1)
+						dict_df[category][f'avg_{m.name}_stderr'] = np.sqrt(m.variance)
+						dict_df[category][f'{m.name}_95ci_low'] = score.mean() - c*np.sqrt(m.variance)
+						dict_df[category][f'{m.name}_95ci_high'] = score.mean() + c*np.sqrt(m.variance)
+					else:
+						dict_df[category][f'avg_{m.name}_stderr'] = np.nan
+						dict_df[category][f'{m.name}_95ci_low'] = np.nan
+						dict_df[category][f'{m.name}_95ci_high'] = np.nan
+					dict_df[category][f'pool_{m.name}'] = m(df.loc[df[fairness_label]==category], df.loc[df[fairness_label]==category])
+		df_xls = pd.DataFrame().from_dict(dict_df, orient = 'index')
+		df_xls = df_xls.reset_index()
+		df_xls = df_xls.rename({'index':fairness_label}, axis = 'columns')
+		df_xls.to_excel(self.output()["xls"].path, index=False)
+		df_xls.to_pickle(self.output()["pickle"].path)
+
+	def output(self):
+		if(self.ext_val == 'Yes'):
+			prefix = 'EXT_'
+		else:
+			prefix = ''
+		try:
+			os.makedirs(os.path.join(tmp_path,self.__class__.__name__,self.wf_name))
+		except:
+			pass
+		return {"xls": luigi.LocalTarget(os.path.join(tmp_path,self.__class__.__name__,self.wf_name,f"Evaluation_Fairness_{prefix}{self.clf_name}.xlsx")),
+				"pickle": luigi.LocalTarget(os.path.join(tmp_path,self.__class__.__name__,self.wf_name,f"Evaluation_Fairness_{prefix}{self.clf_name}.pickle"))}
 
 
 class Evaluate_ML(luigi.Task):
@@ -667,7 +835,10 @@ class DescriptiveXLS(luigi.Task):
 			df_filtered = WF_info[self.wf_name]["filter_external_validation"](df_input)
 		label = WF_info[self.wf_name]["label_name"]
 
-		df_output=create_descriptive_xls(df_filtered, self.wf_name, label)
+		if (WF_info[self.wf_name]['type'] == 'classification') or (WF_info[self.wf_name]['type'] == 'survival'):
+			df_output=create_descriptive_comparation(df_filtered, self.wf_name, label)
+		elif WF_info[self.wf_name]['type'] == 'regression':
+			df_output=create_descriptive_correlation(df_filtered, self.wf_name, label)
 		writer = pd.ExcelWriter(self.output().path, engine='xlsxwriter')
 		df_output.to_excel(writer, sheet_name='Sheet1')
 		writer.close()
@@ -687,6 +858,7 @@ class DescriptiveXLS(luigi.Task):
 class HistogramsPDF(luigi.Task):
 	wf_name = luigi.Parameter()
 	ext_val = luigi.Parameter(default='No')
+	label_name = luigi.Parameter()
 
 	def requires(self):
 		if(self.ext_val == 'Yes'):
@@ -698,36 +870,101 @@ class HistogramsPDF(luigi.Task):
 		setupLog(self.__class__.__name__)
 		df_input = pd.read_pickle(self.input()["pickle"].path)
 		if self.ext_val == 'No':
-			df_filtered = WF_info[self.wf_name]["filter_function"](df_input)
+			df = WF_info[self.wf_name]["filter_function"](df_input)
 		else:
-			df_filtered = WF_info[self.wf_name]["filter_external_validation"](df_input)
+			df = WF_info[self.wf_name]["filter_external_validation"](df_input)
 		label = WF_info[self.wf_name]["label_name"]
 		features = WF_info[self.wf_name]["feature_list"]
 
 		file_path = os.path.join(tmp_path, self.__class__.__name__, f"histograma_temporal_{self.wf_name}.pdf")
 		pp = PdfPages(file_path)
 		for f in features:
-			a = np.random.random(200)
-			fig, ax= plt.subplots(figsize=(10,10))
-			f_min = df_filtered.loc[df_filtered[f].notnull(), f].min()
-			f_max = df_filtered.loc[df_filtered[f].notnull(), f].max()
-			f_std = df_filtered.loc[df_filtered[f].notnull(), f].std()
-			if (f_std != 0) & (np.isnan(f_std)==False):
-				ax.hist(df_filtered.loc[df_filtered[f].notnull()&(df_filtered[label]==0), f],
-						bins = np.arange(f_min, f_max + f_std/4., f_std/4.),
-						label = f"{label}=0")
-				ax.hist(df_filtered.loc[df_filtered[f].notnull()&(df_filtered[label]==1), f],
-						bins = np.arange(f_min, f_max + f_std/4., f_std/4.),
-						label = f"{label}=1", alpha = 0.5)
-				ax.set_title(f)
-				ax.legend()
+			fig, ax= plt.subplots(3,1,figsize=(10,15), height_ratios = [1,3,1])
+			f_min = df.loc[df[f].notnull(), f].min()
+			f_max = df.loc[df[f].notnull(), f].max()
+			f_std = df.loc[df[f].notnull(), f].std()
+			if f_min != f_max:
+				ax[0].hist(df.loc[df[f].notnull(),f], bins = np.arange(f_min -f_std/8., f_max+f_std/8., f_std/4.))
 			else:
-				ax.hist(df_filtered.loc[df_filtered[f].notnull()&(df_filtered[label]==0), f],
-						label = f"{label}=0")
-				ax.hist(df_filtered.loc[df_filtered[f].notnull()&(df_filtered[label]==1), f],
-						label = f"{label}=1", alpha = 0.5)
-				ax.set_title(f)
-				ax.legend()
+				ax[0].hist(df.loc[df[f].notnull(),f])
+			ax[0].set_title("Histogram")
+			if len(df[self.label_name].unique()) > 5:
+				ax[1].scatter(df.loc[df[f].notnull(), self.label_name], df.loc[df[f].notnull(),f])
+				ax[1].set_xlabel(self.label_name)
+				ax[1].set_ylabel(f)
+
+				quantiles = [df[self.label_name].min(),
+							df[self.label_name].quantile(0.25),
+							df[self.label_name].quantile(0.5),
+							df[self.label_name].quantile(0.75),
+							df[self.label_name].max()]
+				labels = []
+				intervals = []
+				for l in range(len(quantiles)-1):
+					l_min = quantiles[l]
+					l_max = quantiles[l+1]
+					if l != len(quantiles)-2:
+						interval = (df[self.label_name]>=l_min) & (df[self.label_name]<l_max)
+						label_plot = f"{self.label_name} [{l_min:.3g}-{l_max:.3g})"
+					else:
+						interval = (df[self.label_name]>=l_min) & (df[self.label_name]<=l_max)
+						label_plot = f"{self.label_name} [{l_min:.3g}-{l_max:.3g}]"
+					labels.append(label_plot)
+					intervals.append(interval)
+				ax[2].barh([label_plot for label_plot in labels],
+							[(df[f].notnull() & interval).sum() for interval in intervals],
+							label = 'Filled')
+				ax[2].barh([label_plot for label_plot in labels],
+							[(df[f].isnull() & interval).sum() for interval in intervals],
+							left = [(df[f].notnull() & interval).sum() for interval in intervals],
+							label = 'Missing')
+				ax[2].legend()
+
+			else:
+				if len(df[f].unique()) <=5:
+					table = []
+					for v in df[f].unique():
+						table.append([((df[f]==v) & (df[self.label_name]==l)).sum() for l in df[self.label_name].unique()])
+					ax[1].table(cellText=table,
+								colLabels = [f"{self.label_name}={l}" for l in df[self.label_name].unique()],
+								rowLabels = [f"{f}={v}" for v in df[f].unique()],
+								rowLoc = 'right',
+								bbox = [0.3,0.2,0.6,0.6])
+				else:
+					ax[1].boxplot([df.loc[df[f].notnull() & (df[self.label_name]==l), f] for l in df[self.label_name].unique()])
+					ax[1].set_xticklabels([f"{self.label_name}={l}" for l in df[self.label_name].unique()], rotation=10, ha='right')
+					ax[1].set_ylabel(f)
+
+				ax[2].barh([f"{self.label_name}={l}" for l in df[self.label_name].unique()],
+							[(df[f].notnull() & (df[self.label_name]==l)).sum() for l in df[self.label_name].unique()],
+							label = 'Filled')
+				ax[2].barh([f"{self.label_name}={l}" for l in df[self.label_name].unique()],
+							[(df[f].isnull() & (df[self.label_name]==l)).sum() for l in df[self.label_name].unique()],
+							left = [(df[f].notnull() & (df[self.label_name]==l)).sum() for l in df[self.label_name].unique()],
+							label = 'Missing')
+
+				ax[2].legend()
+
+			# fig, ax= plt.subplots(figsize=(10,10))
+			# f_min = df_filtered.loc[df_filtered[f].notnull(), f].min()
+			# f_max = df_filtered.loc[df_filtered[f].notnull(), f].max()
+			# f_std = df_filtered.loc[df_filtered[f].notnull(), f].std()
+			# if (f_std != 0) & (np.isnan(f_std)==False):
+			# 	ax.hist(df_filtered.loc[df_filtered[f].notnull()&(df_filtered[label]==0), f],
+			# 			bins = np.arange(f_min, f_max + f_std/4., f_std/4.),
+			# 			label = f"{label}=0")
+			# 	ax.hist(df_filtered.loc[df_filtered[f].notnull()&(df_filtered[label]==1), f],
+			# 			bins = np.arange(f_min, f_max + f_std/4., f_std/4.),
+			# 			label = f"{label}=1", alpha = 0.5)
+			# 	ax.set_title(f)
+			# 	ax.legend()
+			# else:
+			# 	ax.hist(df_filtered.loc[df_filtered[f].notnull()&(df_filtered[label]==0), f],
+			# 			label = f"{label}=0")
+			# 	ax.hist(df_filtered.loc[df_filtered[f].notnull()&(df_filtered[label]==1), f],
+			# 			label = f"{label}=1", alpha = 0.5)
+			# 	ax.set_title(f)
+			# 	ax.legend()
 			pp.savefig(fig)
 		pp.close()
 
@@ -765,14 +1002,14 @@ class FinalModelAndHyperparameterResults(luigi.Task):
 		clf=ML_info[self.clf_name]["clf"]
 
 		X_full = df_filtered.loc[:,features]
-		Y_full = df_filtered.loc[:,[label]]
+		Y_full = df_filtered.loc[:,label]
 
-		X = X_full.loc[~Y_full[label].isnull()]
-		Y = Y_full.loc[~Y_full[label].isnull()]
+		X = X_full.loc[~Y_full.isnull()]
+		Y = Y_full.loc[~Y_full.isnull()]
 
 		if(group_label is not None):
 			G_full = df_filtered.loc[:,[group_label]]
-			G = G_full.loc[~Y_full[label].isnull()]
+			G = G_full.loc[~Y_full.isnull()]
 
 		if WF_info[self.wf_name]['type'] == 'classification':
 			try:
@@ -786,8 +1023,8 @@ class FinalModelAndHyperparameterResults(luigi.Task):
 				clf.fit(X, Y)
 		elif WF_info[self.wf_name]['type'] == 'survival':
 			time = WF_info[self.wf_name]["label_time"]
-			T_full = df_filtered.loc[:,[time]]
-			T = T_full.loc[~Y_full[label].isnull()]
+			T_full = df_filtered.loc[:,time]
+			T = T_full.loc[~Y_full.isnull()]
 			R = pd.DataFrame({'label':Y, 'time':T}).to_records(index=False)
 			try:
 				clf.fit(X, R, groups=G)
@@ -1318,7 +1555,8 @@ class MDAFeatureImportances(luigi.Task):
 					df_results.set_index("CustomIndex")
 					df_test["Prediction"] = df_results["Prediction"]
 					label = WF_info[self.wf_name]["label_name"]
-					time = WF_info[self.wf_name]["label_time"]
+					if WF_info[self.wf_name]["type"] == 'survival':
+						time = WF_info[self.wf_name]["label_time"]
 					df_test["True Label"] = df_test[label]
 					df_train["True Label"] = df_train[label]
 					if WF_info[self.wf_name]["type"] == 'classification':
@@ -1637,7 +1875,6 @@ class FinalModelTrainResults(luigi.Task):
 			pickle.dump(results_dict, f, pickle.HIGHEST_PROTOCOL)
 
 		with open(self.output()["results_txt"].path, 'w') as f:
-			# Pickle the 'data' dictionary using the highest protocol available.
 			print(results_dict, file=f)
 
 		# Shapley values, internal value
@@ -1651,6 +1888,9 @@ class FinalModelTrainResults(luigi.Task):
 		else:
 			explainer = shap.PermutationExplainer(lambda x: clf.predict(x), masker, link = shap.links.identity)
 		shap_values = explainer(X.astype(float).values).values
+
+		with open(self.output()[f"shapvalues"].path, 'wb') as f:
+			pickle.dump(shap_values, f, pickle.HIGHEST_PROTOCOL)
 
 		shap.summary_plot(shap_values, X, max_display = 100, show=False)
 		plt.savefig(self.output()['shap'].path, bbox_inches='tight', dpi=300)
@@ -1667,7 +1907,43 @@ class FinalModelTrainResults(luigi.Task):
 				"pickle": luigi.LocalTarget(os.path.join(tmp_path,self.__class__.__name__,self.wf_name,f"FinalModelTrainPredictions_df_{self.clf_name}.pickle")),
 				"results": luigi.LocalTarget(os.path.join(tmp_path,self.__class__.__name__,self.wf_name,f"FinalModelTrainResults_{self.clf_name}.pickle")),
 				"results_txt": luigi.LocalTarget(os.path.join(tmp_path,self.__class__.__name__,self.wf_name,f"FinalModelTrainResults_{self.clf_name}.txt")),
-				"shap": luigi.LocalTarget(os.path.join(tmp_path,self.__class__.__name__,self.wf_name,f"FinalModelTrainShapValues_{self.clf_name}.png"))}
+				"shap": luigi.LocalTarget(os.path.join(tmp_path,self.__class__.__name__,self.wf_name,f"FinalModelTrainShapValues_{self.clf_name}.png")),
+				"shapvalues": luigi.LocalTarget(os.path.join(tmp_path,self.__class__.__name__,self.wf_name,f"FinalModelTrainShapValues_{self.clf_name}.pickle"))}
+
+class FairnessReport(luigi.Task):
+	list_ML = luigi.ListParameter()
+	wf_name = luigi.Parameter()
+	datestring = luigi.Parameter(default=dt.datetime.now().strftime("%y%m%d-%H%M%S"))
+	ext_val = luigi.Parameter(default = 'No')
+
+	def requires(self):
+		requirements = {}
+		requirements['Descriptive'] = DescriptiveFairness(wf_name = self.wf_name, ext_val = self.ext_val)
+		for model in self.list_ML:
+			requirements[model] = Evaluate_Fairness(wf_name = self.wf_name, clf_name = model, ext_val = self.ext_val)
+			requirements['shap_'+model] = InterpretationShapFairness(wf_name = self.wf_name, clf_name = model, ext_val = self.ext_val)
+		return requirements
+
+	def run(self):
+		setupLog(self.__class__.__name__)
+		for model in self.list_ML:
+			shutil.copy(self.input()[model]['xls'].path, self.output()['fairness_'+model].path)
+			shutil.copy(self.input()['shap_'+model].path, self.output()['shap_'+model].path)
+		shutil.copy(self.input()['Descriptive'].path, self.output()['xls'].path)
+
+
+
+	def output(self):
+		try:
+			os.makedirs(os.path.join(report_path+f'-{self.datestring}', self.wf_name, "Fairness Evaluation"))
+		except:
+			pass
+		outputs = {}
+		for model in self.list_ML:
+			outputs['fairness_'+model] = luigi.LocalTarget(os.path.join(report_path+f'-{self.datestring}', self.wf_name, "Fairness Evaluation", f"EvaluationResults_FairnessSubgroups_{model}.xlsx"))
+			outputs['shap_'+model] = luigi.LocalTarget(os.path.join(report_path+f'-{self.datestring}', self.wf_name, "Fairness Evaluation", f"ShapFairness_{model}.png"))
+		outputs['xls'] = luigi.LocalTarget(os.path.join(report_path+f'-{self.datestring}', self.wf_name, "Fairness Evaluation", "Fairness_Group_Comparison.xlsx"))
+		return outputs
 
 class TrainingReport(luigi.Task):
 	list_ML = luigi.ListParameter()
@@ -1709,6 +1985,23 @@ class TrainingReport(luigi.Task):
 			outputs['metric_'+metric] = luigi.LocalTarget(os.path.join(report_path+f'-{self.datestring}', self.wf_name, "Training Report", f"TrainResults_All_Models_{metric}.png"))
 		return outputs
 
+class AllFairnessReports(luigi.Task):
+	list_WF = luigi.ListParameter(default=list(WF_info.keys()))
+	datestring = luigi.Parameter(default=dt.datetime.now().strftime("%y%m%d-%H%M%S"))
+
+	def requires(self):
+		for it_wf_name in self.list_WF:
+			if 'fairness_label' in WF_info[it_wf_name].keys():
+				yield FairnessReport(wf_name = it_wf_name, list_ML=WF_info[it_wf_name]['models'], datestring=self.datestring)
+
+	def run(self):
+		setupLog(self.__class__.__name__)
+		with open(self.output().path,'w') as f:
+			f.write("prueba\n")
+
+	def output(self):
+		return luigi.LocalTarget(os.path.join(log_path, f"AllFairnessReports_Log-{self.datestring}.txt"))
+
 class AllTrainingReports(luigi.Task):
 	list_WF = luigi.ListParameter(default=list(WF_info.keys()))
 	datestring = luigi.Parameter(default=dt.datetime.now().strftime("%y%m%d-%H%M%S"))
@@ -1716,6 +2009,8 @@ class AllTrainingReports(luigi.Task):
 	def requires(self):
 		for it_wf_name in self.list_WF:
 			yield TrainingReport(wf_name = it_wf_name, list_ML=WF_info[it_wf_name]['models'], datestring=self.datestring)
+			if(WF_info[it_wf_name]['external_validation'] == 'Yes'):
+				yield TrainingReport(wf_name = it_wf_name, list_ML=WF_info[it_wf_name]['models'], ext_val = 'Yes', datestring=self.datestring)
 
 	def run(self):
 		setupLog(self.__class__.__name__)
@@ -1861,9 +2156,9 @@ class AllHistograms(luigi.Task):
 
 	def requires(self):
 		for it_wf_name in self.list_WF:
-			yield HistogramsPDF(wf_name = it_wf_name)
+			yield HistogramsPDF(wf_name = it_wf_name, label_name = WF_info[it_wf_name]['label_name'])
 			if(WF_info[it_wf_name]['external_validation'] == 'Yes'):
-				yield HistogramsPDF(wf_name = it_wf_name, ext_val = 'Yes')
+				yield HistogramsPDF(wf_name = it_wf_name, ext_val = 'Yes', label_name = WF_info[it_wf_name]['label_name'])
 
 	def run(self):
 		setupLog(self.__class__.__name__)
@@ -1945,6 +2240,7 @@ class AllTasks(luigi.Task):
 				AllModels(list_WF = self.list_WF, datestring=self.datestring),
 				AllPerformanceReports(list_WF = self.list_WF, datestring=self.datestring),
 				AllTrainingReports(list_WF = self.list_WF, datestring=self.datestring),
+				AllFairnessReports(list_WF = self.list_WF, datestring=self.datestring),
 				AllInterpretationReports(list_WF = self.list_WF, datestring=self.datestring,
 										best_MDA = self.best_MDA, best_shap = self.best_shap, all_MDA = self.all_MDA, all_shap = self.all_shap),
 										]
