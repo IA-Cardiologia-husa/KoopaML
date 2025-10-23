@@ -32,7 +32,7 @@ pipeline_lr = sk_pl.Pipeline(steps=[("im",sk_im.SimpleImputer()),("lr",sk_lm.Log
 ML_info['LR'] = {'formal_name': 'Logistic Regression',
 				 'clf': pipeline_lr}
 
-pipeline_rf = sk_pl.Pipeline(steps=[("knn_im",sk_im.KNNImputer()),("rf",sk_en.RandomForestClassifier(n_estimators = 1000, max_features = 'auto'))])
+pipeline_rf = sk_pl.Pipeline(steps=[("knn_im",sk_im.KNNImputer()),("rf",sk_en.RandomForestClassifier(n_estimators = 1000))])
 
 ML_info['RF'] = {'formal_name': 'Random Forest',
 				 'clf': pipeline_rf}
@@ -43,7 +43,7 @@ pipeline_lr = sk_pl.Pipeline(steps=[("im",sk_im.SimpleImputer()),
 									('lr', sk_lm.LogisticRegression())])
 grid_params_lr=[{'lr__penalty':['l1', 'l2'], 'lr__C':[0.1,1.,10.,100.], 'lr__solver':['saga']},
 				{'lr__penalty':['elasticnet'], 'lr__l1_ratio':[0.5], 'lr__C':[0.1,1.,10.,100.], 'lr__solver':['saga']},
-				{'lr__penalty':['none'], 'lr__solver':['saga']}]
+				{'lr__penalty':[None], 'lr__solver':['saga']}]
 tuned_lr=sk_ms.GridSearchCV(pipeline_lr,grid_params_lr, cv=10,scoring ='roc_auc', return_train_score=False, verbose=1)
 
 ML_info['LR_SCL_HypTuning'] = {'formal_name': 'LR (Standard Scaler, Power Transformer, and hyperparameters)',
@@ -178,9 +178,9 @@ ML_info['R_BT'] = {'formal_name': 'XGBoost',
 
 ML_info['R_CAT'] = {'formal_name': 'CatBoost',
 				 'clf': catboost.CatBoostRegressor()}
-
-ML_info['R_LGBM'] = {'formal_name': 'LightGBM',
-				 'clf': sk_pl.Pipeline(steps=[("im",sk_im.SimpleImputer(strategy='median')), ('lgbm', lightgbm.LGBMRegressor())])}
+#
+# ML_info['R_LGBM'] = {'formal_name': 'LightGBM',
+# 				 'clf': sk_pl.Pipeline(steps=[("im",sk_im.SimpleImputer(strategy='median')), ('lgbm', lightgbm.LGBMRegressor())])}
 
 ML_info['Ridge'] = {'formal_name': 'Ridge Regression',
 					'clf': sk_pl.Pipeline(steps=[("im",sk_im.SimpleImputer(strategy='median').set_output(transform="pandas")),
@@ -215,3 +215,14 @@ ML_info['R_Linear'] = {'formal_name': 'Linear Regression',
 												 ("lr",sk_lm.LinearRegression ())])}
 
 # SUPERVIVENCIA
+
+# import sksurv.linear_model as su_lm
+# import sksurv.ensemble as su_en
+#
+# ML_info['COXnet'] = {'formal_name':"Regresión de Cox regularizada",
+#					 'clf':sk_pl.Pipeline(steps=[("im", sk_im.SimpleImputer(strategy='median').set_output(transform="pandas")), ('cox', su_lm.CoxnetSurvivalAnalysis())])}
+# ML_info['SurvGB'] = {'formal_name':"SurvivalGradientBoosting",
+# 					 'clf':sk_pl.Pipeline(steps=[("im", sk_im.SimpleImputer().set_output(transform="pandas")), ('gb', su_en.GradientBoostingSurvivalAnalysis())])}
+#
+# ML_info['SurvCWGB'] = {'formal_name':"ComponentwiseSurvivalGradientBoosting",
+# 					 'clf':sk_pl.Pipeline(steps=[("im", sk_im.SimpleImputer().set_output(transform="pandas")), ('gb', su_en.ComponentwiseGradientBoostingSurvivalAnalysis())])}

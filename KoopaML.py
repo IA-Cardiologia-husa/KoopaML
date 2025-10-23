@@ -432,7 +432,7 @@ class CreateFolds(luigi.Task):
 			data.to_excel(self.output()["xls"].path, index=False)
 			data.to_pickle(self.output()["pickle"].path)
 		else:
-			raise('incompatible crossvalidation type')
+			raise Exception('incompatible crossvalidation type')
 
 	def output(self):
 		try:
@@ -516,10 +516,16 @@ class CalculateKFold(luigi.Task):
 				data_test['Time'] = T_test
 			data_train['Prediction'] = Y_pred_train
 			data_test['Prediction'] = Y_pred_test
+			if 'fairness_label' in WF_info[self.wf_name].keys() and (WF_info[self.wf_name]['fairness_label'] is not None):
+				fairness_label = WF_info[self.wf_name]['fairness_label']
+				data_train[f'Fairness_label: {fairness_label}'] = data_train[fairness_label]
+				data_test[f'Fairness_label: {fairness_label}'] = data_test[fairness_label]
 
 			saved_columns = ['CustomIndex', 'Repetition', 'Fold', 'True Label','Prediction']
 			if WF_info[self.wf_name]['type'] == 'survival':
 				saved_columns.insert(4, 'Time')
+			if 'fairness_label' in WF_info[self.wf_name].keys() and (WF_info[self.wf_name]['fairness_label'] is not None):
+				saved_columns.insert(1, f'Fairness_label: {fairness_label}')
 			if ((cv_type == 'groupkfold') or (cv_type=='stratifiedgroupkfold')):
 				saved_columns.insert(1, f'Group_label: {group_label}')
 
@@ -577,12 +583,12 @@ class InterpretationShapFairness(luigi.Task):
 		with open(self.input()["shap"]["shapvalues"].path, 'rb') as f:
 			shap_values = pickle.load(f)
 
-		cats = X[fairness_label].unique()
+		cats = df[fairness_label].unique()
 		plt.figure(figsize=(5*len(cats),5))
 		for i in range(len(cats)):
 			c = cats[i]
-			X_cat = X.loc[X[fairness_label]==c]
-			shap_cat = shap_values[X[fairness_label]==c]
+			X_cat = X.loc[df[fairness_label]==c]
+			shap_cat = shap_values[df[fairness_label]==c]
 			shap_cat = shap_cat - shap_cat.mean(axis = 0)[np.newaxis,...]
 			ax = plt.subplot(1,len(cats), i+1)
 			shap.summary_plot(shap_cat, X_cat, max_display = 20, show=False)
@@ -883,9 +889,11 @@ class HistogramsPDF(luigi.Task):
 			f_min = df.loc[df[f].notnull(), f].min()
 			f_max = df.loc[df[f].notnull(), f].max()
 			f_std = df.loc[df[f].notnull(), f].std()
-			if f_min != f_max:
+			# if (f_min != f_max) and not np.isnan(float(f_max)-f_min):
+			try:
 				ax[0].hist(df.loc[df[f].notnull(),f], bins = np.arange(f_min -f_std/8., f_max+f_std/8., f_std/4.))
-			else:
+			# else:
+			except:
 				ax[0].hist(df.loc[df[f].notnull(),f])
 			ax[0].set_title("Histogram")
 			if len(df[self.label_name].unique()) > 5:
@@ -1025,7 +1033,7 @@ class FinalModelAndHyperparameterResults(luigi.Task):
 			time = WF_info[self.wf_name]["label_time"]
 			T_full = df_filtered.loc[:,time]
 			T = T_full.loc[~Y_full.isnull()]
-			R = pd.DataFrame({'label':Y, 'time':T}).to_records(index=False)
+			R = pd.DataFrame({'label':Y.astype(bool), 'time':T}).to_records(index=False)
 			try:
 				clf.fit(X, R, groups=G)
 			except:
@@ -1157,6 +1165,7 @@ class GraphsWF(luigi.Task):
 				results_dict=pickle.load(f)
 			m.plot(df, results_dict, ax, ML_info[score]["formal_name"])
 		m.save_figure(fig, ax, self.output().path)
+		plt.close()
 
 
 	def output(self):
@@ -1415,7 +1424,9 @@ class ShapleyValues(luigi.Task):
 					masker = shap.maskers.Independent(data =  df_train.loc[:,feature_list].astype(float))
 					if WF_info[self.wf_name]['type'] == 'classification':
 						if hasattr(model, 'predict_proba'):
-							explainer = shap.PermutationExplainer(lambda x: model.predict_proba(x)[:,1], masker, link = shap.links.logit)
+							# Hacemos clip, porque si no predicciones de 0% o 100% (que se pueden dar en un random forest) pueden dar lugar a error
+							# con el shap.links.logit; la otra opción sería usar shap.links.identity
+							explainer = shap.PermutationExplainer(lambda x: np.clip(model.predict_proba(x)[:,1],1e-8,1-1e-8), masker, link = shap.links.logit)
 						else:
 							explainer = shap.PermutationExplainer(lambda x: model.decision_function(x), masker, link = shap.links.identity)
 					else:
@@ -1441,7 +1452,6 @@ class ShapleyValues(luigi.Task):
 					# 	explainer = shap.KernelExplainer(model = lambda x: model.predict_proba(x)[:,1], data = df_train.loc[:,feature_list], link = "identity")
 					# 	shap_values = explainer.shap_values(df_test)
 					list_shap_values.append(shap_values)
-
 
 			#combining results from all iterations
 			shap_values = np.array(list_shap_values[0])
@@ -1825,7 +1835,7 @@ class FinalModelTrainResults(luigi.Task):
 	def run(self):
 		setupLog(self.__class__.__name__)
 
-		clf = pd.read_pickle(self.input()["clf"].path)
+		model = pd.read_pickle(self.input()["clf"].path)
 		df = pd.read_pickle(self.input()["data"]["pickle"].path)
 		filter_function = WF_info[self.wf_name]["filter_function"]
 		features = WF_info[self.wf_name]["feature_list"]
@@ -1839,14 +1849,17 @@ class FinalModelTrainResults(luigi.Task):
 
 		if WF_info[self.wf_name]['type'] == 'classification':
 			try:
-				df['Prediction'] = clf.predict_proba(X)[:,1]
+				df['Prediction'] = model.predict_proba(X)[:,1]
 			except:
-				df['Prediction'] = clf.decision_function(X)
+				df['Prediction'] = model.decision_function(X)
 		else:
-			df['Prediction']= clf.predict(X)
+			df['Prediction']= model.predict(X)
 		df['True Label'] = df[label]
 		if WF_info[self.wf_name]['type'] == 'survival':
 			df['Time'] = df[time]
+		if 'fairness_label' in WF_info[self.wf_name].keys() and (WF_info[self.wf_name]['fairness_label'] is not None):
+			fairness_label = WF_info[self.wf_name]['fairness_label']
+			df[f'Fairness_label: {fairness_label}'] = df[fairness_label]
 
 		critical_pvalue=0.05
 		results_dict = {}
@@ -1882,11 +1895,11 @@ class FinalModelTrainResults(luigi.Task):
 		masker = shap.maskers.Independent(data =  X.astype(float))
 		if WF_info[self.wf_name]['type'] == 'classification':
 			if hasattr(model, 'predict_proba'):
-				explainer = shap.PermutationExplainer(lambda x: clf.predict_proba(x)[:,1], masker, link = shap.links.logit)
+				explainer = shap.PermutationExplainer(lambda x: np.clip(model.predict_proba(x)[:,1],1e-8,1-1e-8), masker, link = shap.links.logit)
 			else:
-				explainer = shap.PermutationExplainer(lambda x: clf.decision_function(x), masker, link = shap.links.identity)
+				explainer = shap.PermutationExplainer(lambda x: model.decision_function(x), masker, link = shap.links.identity)
 		else:
-			explainer = shap.PermutationExplainer(lambda x: clf.predict(x), masker, link = shap.links.identity)
+			explainer = shap.PermutationExplainer(lambda x: model.predict(x), masker, link = shap.links.identity)
 		shap_values = explainer(X.astype(float).values).values
 
 		with open(self.output()[f"shapvalues"].path, 'wb') as f:
@@ -1968,10 +1981,15 @@ class TrainingReport(luigi.Task):
 			for model in self.list_ML:
 				with open(self.input()[model]["pickle"].path, 'rb') as f:
 					df=pickle.load(f)
+				# TODO: Hay que cambiar como codificamos fairness label para que esté incluido en el pickle y pueda no aparecer en las features
+				if 'fairness_label' in WF_info[self.wf_name].keys() and (WF_info[self.wf_name]['fairness_label'] is not None):
+					fairness_label = WF_info[self.wf_name]['fairness_label']
+					df[f'Fairness_label: {fairness_label}'] = df[fairness_label]
 				with open(self.input()[model]["results"].path, 'rb') as f:
 					results_dict=pickle.load(f)
 				m.plot(df, results_dict, ax, ML_info[model]["formal_name"])
 			m.save_figure(fig, ax, self.output()['metric_'+metric].path)
+			plt.close()
 
 	def output(self):
 		try:
@@ -2056,11 +2074,13 @@ class InterpretationReport(luigi.Task):
 			best_ml = max(score_ml.keys(), key=(lambda k: score_ml[k]))
 			if self.best_MDA == 'Yes':
 				prerequisite = MDAFeatureImportances(clf_name = best_ml, wf_name = self.wf_name, ext_val = self.ext_val, metrics = WF_info[self.wf_name]['metrics'][0:1])
-				luigi.build([prerequisite], local_scheduler = False)
+				# luigi.build([prerequisite], local_scheduler = False)
+				yield prerequisite
 				shutil.copy(prerequisite.output()[f'{WF_info[self.wf_name]["metrics"][0]}_txt'].path, self.output()['best_mda'].path)
 			if self.best_shap == 'Yes':
 				prerequisite = ShapleyValues(clf_name = best_ml, wf_name = self.wf_name, ext_val = self.ext_val)
-				luigi.build([prerequisite], local_scheduler = False)
+				# luigi.build([prerequisite], local_scheduler = False)
+				yield prerequisite
 				shutil.copy(prerequisite.output()["png"].path, self.output()['best_shap'].path)
 		if self.all_MDA == 'Yes':
 			for i in self.list_ML:

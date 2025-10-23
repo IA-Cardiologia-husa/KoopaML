@@ -10,6 +10,7 @@ import os
 
 from user_variables_info import dict_var
 from user_MLmodels_info import ML_info
+from user_Workflow_info import WF_info
 
 def create_descriptive_comparation(data, wf_name, label):
 	row_list =[]
@@ -19,7 +20,7 @@ def create_descriptive_comparation(data, wf_name, label):
 			if(data[i].dtype in ['float64','float32','int64','int32','bool']):
 				dict_var[i]=i
 
-	for i in data.columns:
+	for i in WF_info[wf_name]['feature_list']:
 		if i in dict_var.keys():
 			if(len(list(data.loc[data[i].notnull(),i].unique())) == 2):
 				negative_class = sorted(list(data.loc[data[i].notnull(),i].unique()))[0]
@@ -76,14 +77,27 @@ def create_descriptive_correlation(data, wf_name, label):
 			if(data[i].dtype in ['float64','float32','int64','int32','bool']):
 				dict_var[i]=i
 
-	for i in data.columns:
+	for i in WF_info[wf_name]['feature_list']:
 		if i in dict_var.keys():
 			if(len(list(data.loc[data[i].notnull(),i].unique())) == 2):
 				N = data[i].notnull().sum()
+				negative_class = sorted(list(data.loc[data[i].notnull(),i].unique()))[0]
+				positive_class = sorted(list(data.loc[data[i].notnull(),i].unique()))[1]
+				t0 = list(data[i]).count(negative_class)
+				t1 = list(data[i]).count(positive_class)
+				dt = data[i].astype(float).describe()
+
 				r, pvalue = sc_st.pearsonr(data.loc[data[i].notnull(),i], data.loc[data[i].notnull(), label])
 
-				row = {'Name':dict_var[i], 'N':N, 'Pearson r':f"{r:.3f}", 'p-value':f'{pvalue:.3f}'}
+				row = {'Name':f"{dict_var[i]} = {positive_class}", 'N':N, 'Mean':f"{t1} ({dt['mean']:.1%})",
+					   'Pearson r':f"{r:.3f}", 'p-value':f'{pvalue:.3f}'}
 
+				row_list.append(row)
+			else:
+				dt = data[i].astype(float).describe()
+				r, pvalue = sc_st.pearsonr(data.loc[data[i].notnull(),i], data.loc[data[i].notnull(), label])
+				row = {'Name':dict_var[i], 'N':dt['count'], 'Mean':f'{dt["mean"]:.3g} ± {dt["std"]:.3g}',
+					   'Pearson r':f"{r:.3f}", 'p-value':f'{pvalue:.3f}'}
 				row_list.append(row)
 	if(len(row_list) > 0):
 		df_temp = pd.DataFrame(row_list).set_index('Name')
